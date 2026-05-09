@@ -2,10 +2,6 @@
 
 > Post-it numérique universel — chiffré, anonyme, disponible partout.
 
-**[mindlog.today](https://mindlog.today)** · `jot` is the code name for the Mindlog project.
-
----
-
 ## What is jot?
 
 jot is a universal encrypted note system — think digital post-its. It is end-to-end encrypted, anonymous by default, and designed to feel like a Unix tool: simple, composable, pipeable.
