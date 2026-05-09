@@ -11,6 +11,29 @@ jot is a universal encrypted note system — think digital post-its. It is end-t
 - One binary: CLI + API server + web SPA, statically linked
 - Runs anywhere: Linux (musl), macOS, Windows
 
+## Connecting to a server
+
+By default the client connects to `http://localhost:8080`. To point it at a remote or self-hosted instance, use any of the following methods (in order of precedence):
+
+**CLI flag** — per-command override:
+```bash
+jot --server https://jot.example.com list
+```
+
+**Environment variable** — session-wide:
+```bash
+export JOT_SERVER=https://jot.example.com
+jot list
+jot add "my note"
+```
+
+**Config file** — persistent, stored at `~/.jot/config.toml`:
+```toml
+server = "https://jot.example.com"
+```
+
+The config file is created automatically on first run. The `--server` flag always takes precedence over the environment variable, which always takes precedence over the config file.
+
 ## Quick start
 
 ```bash
