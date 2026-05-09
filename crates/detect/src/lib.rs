@@ -140,12 +140,18 @@ mod tests {
 
     #[test]
     fn detects_tiff_le() {
-        assert_eq!(detect(&pad(&[0x49, 0x49, 0x2A, 0x00])).unwrap(), NoteType::Image);
+        assert_eq!(
+            detect(&pad(&[0x49, 0x49, 0x2A, 0x00])).unwrap(),
+            NoteType::Image
+        );
     }
 
     #[test]
     fn detects_tiff_be() {
-        assert_eq!(detect(&pad(&[0x4D, 0x4D, 0x00, 0x2A])).unwrap(), NoteType::Image);
+        assert_eq!(
+            detect(&pad(&[0x4D, 0x4D, 0x00, 0x2A])).unwrap(),
+            NoteType::Image
+        );
     }
 
     #[test]
@@ -166,7 +172,10 @@ mod tests {
 
     #[test]
     fn detects_ico() {
-        assert_eq!(detect(&pad(&[0x00, 0x00, 0x01, 0x00])).unwrap(), NoteType::Image);
+        assert_eq!(
+            detect(&pad(&[0x00, 0x00, 0x01, 0x00])).unwrap(),
+            NoteType::Image
+        );
     }
 
     #[test]
@@ -230,7 +239,10 @@ mod tests {
 
     #[test]
     fn detects_webm() {
-        assert_eq!(detect(&pad(&[0x1A, 0x45, 0xDF, 0xA3])).unwrap(), NoteType::Voice);
+        assert_eq!(
+            detect(&pad(&[0x1A, 0x45, 0xDF, 0xA3])).unwrap(),
+            NoteType::Voice
+        );
     }
 
     #[test]
@@ -240,7 +252,10 @@ mod tests {
 
     #[test]
     fn detects_wma() {
-        assert_eq!(detect(&pad(&[0x30, 0x26, 0xB2, 0x75])).unwrap(), NoteType::Voice);
+        assert_eq!(
+            detect(&pad(&[0x30, 0x26, 0xB2, 0x75])).unwrap(),
+            NoteType::Voice
+        );
     }
 
     // --- Collisions ---
