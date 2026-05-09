@@ -30,7 +30,9 @@ pub fn decrypt(key: &[u8; 32], blob: &[u8]) -> Result<Vec<u8>, CoreError> {
     let (nonce_bytes, cipher_data) = blob.split_at(12);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
-    cipher.decrypt(nonce, cipher_data).map_err(|_| CoreError::Decryption)
+    cipher
+        .decrypt(nonce, cipher_data)
+        .map_err(|_| CoreError::Decryption)
 }
 
 #[cfg(test)]

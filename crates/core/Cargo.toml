@@ -1,7 +1,10 @@
 [package]
-name = "core"
+name = "jot-core"
 version.workspace = true
 edition.workspace = true
+
+[lib]
+name = "jot_core"
 
 [dependencies]
 uuid = { version = "1", features = ["v4", "serde"] }
