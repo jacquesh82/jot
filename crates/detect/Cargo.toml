@@ -2,3 +2,7 @@
 name = "detect"
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+jot-core = { path = "../core" }
+thiserror = "1"
