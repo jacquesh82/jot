@@ -38,7 +38,8 @@ impl BlobStore for S3Store {
     }
 
     async fn get(&self, key: &str) -> Result<Vec<u8>, StorageError> {
-        let resp = self.client
+        let resp = self
+            .client
             .get_object()
             .bucket(&self.bucket)
             .key(key)
