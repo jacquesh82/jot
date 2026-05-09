@@ -1,0 +1,4 @@
+[package]
+name = "detect"
+version.workspace = true
+edition.workspace = true
