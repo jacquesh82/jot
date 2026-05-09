@@ -13,7 +13,8 @@ pub fn sign(key: &SigningKey, message: &[u8]) -> Signature {
 }
 
 pub fn verify(key: &VerifyingKey, message: &[u8], sig: &Signature) -> Result<(), CoreError> {
-    key.verify(message, sig).map_err(|_| CoreError::SignatureInvalid)
+    key.verify(message, sig)
+        .map_err(|_| CoreError::SignatureInvalid)
 }
 
 #[cfg(test)]
