@@ -11,6 +11,33 @@ jot is a universal encrypted note system — think digital post-its. It is end-t
 - One binary: CLI + API server + web SPA, statically linked
 - Runs anywhere: Linux (musl), macOS, Windows
 
+## Authentication
+
+jot has no email or password. Identity is generated locally on first run — a UUID and a cryptographic key pair stored in `~/.jot/`.
+
+**First device** — identity is created automatically:
+```bash
+jot server &        # start the server
+jot init            # generates identity + registers this device
+```
+
+**Linking a new device** — run on the existing device:
+```bash
+jot link
+# Displays a QR code + URL + 4-digit verification code
+#
+# Open this URL on a device already linked:
+# https://localhost:8080/link/a3f9k2
+#
+# Verification code: 7842
+#
+# Waiting... ⠋
+```
+
+On the new device, open the URL (or scan the QR), confirm the code — the symmetric key is transferred encrypted via X25519 ECDH and the new device syncs automatically.
+
+The device token (a JWT signed with Ed25519) is stored at `~/.jot/token` and sent as a Bearer token on every API request. It is managed automatically by the client.
+
 ## Connecting to a server
 
 By default the client connects to `http://localhost:8080`. To point it at a remote or self-hosted instance, use any of the following methods (in order of precedence):
