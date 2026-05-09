@@ -8,7 +8,9 @@ pub struct LocalStore {
 
 impl LocalStore {
     pub fn new(base_path: impl Into<PathBuf>) -> Self {
-        Self { base_path: base_path.into() }
+        Self {
+            base_path: base_path.into(),
+        }
     }
 }
 

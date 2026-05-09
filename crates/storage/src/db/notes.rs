@@ -38,8 +38,12 @@ fn note_from_row(row: &sqlx::sqlite::SqliteRow) -> Note {
         position: row.get("position"),
         blob_key: row.get("blob_key"),
         size: row.get("size"),
-        created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&Utc),
-        updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&Utc),
+        created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+            .unwrap()
+            .with_timezone(&Utc),
+        updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+            .unwrap()
+            .with_timezone(&Utc),
     }
 }
 

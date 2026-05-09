@@ -72,11 +72,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn update_board_position(
-        &self,
-        id: Uuid,
-        position: i32,
-    ) -> Result<(), StorageError> {
+    pub async fn update_board_position(&self, id: Uuid, position: i32) -> Result<(), StorageError> {
         sqlx::query("UPDATE boards SET position = ? WHERE id = ?")
             .bind(position)
             .bind(id.to_string())
