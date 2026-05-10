@@ -21,7 +21,7 @@ async function authedFetch(input: string, init: RequestInit = {}): Promise<Respo
 }
 
 export interface Board { id: string; name: string; position: number }
-export interface Note  { id: string; note_type: string; position: number }
+export interface Note  { id: string; note_type: string; position: number; shared?: boolean }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
 
@@ -167,6 +167,12 @@ export async function getRecentContacts(): Promise<IdentityInfo[]> {
 
 const _ADJ = ["swift","bold","calm","dark","free","glad","keen","mild","neat","pure","rare","safe","tame","warm","wise","bright","crisp","deep","fair","gray","high","just","long","open","rich","slow","tall","true","vast","wild"];
 const _NOUN = ["alder","birch","cedar","daisy","elder","fern","grove","hazel","iris","larch","maple","oak","pine","reed","rose","sage","stone","thorn","vale","wave","brook","cliff","creek","dune","gale","mist","moon","peak","rain","star"];
+
+export async function exportData(): Promise<unknown> {
+  const r = await authedFetch(`${BASE}/export`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
 
 export function generateRandomName(): string {
   const adj = _ADJ[Math.floor(Math.random() * _ADJ.length)];

@@ -45,6 +45,8 @@ pub struct NoteMetadata {
     pub size: i64,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shared: bool,
 }
 
 fn to_metadata(note: &Note) -> NoteMetadata {
@@ -63,6 +65,7 @@ fn to_metadata(note: &Note) -> NoteMetadata {
         size: note.size,
         created_at: note.created_at.to_rfc3339(),
         updated_at: note.updated_at.to_rfc3339(),
+        shared: false,
     }
 }
 
@@ -85,7 +88,22 @@ pub async fn list_notes(
         return Err(ApiError::Forbidden("no access to this board".into()));
     }
     let notes = state.db.list_notes(q.board_id).await?;
-    Ok(Json(notes.iter().map(to_metadata).collect()))
+    let shared_ids: std::collections::HashSet<String> = state
+        .db
+        .list_shared_note_ids_for_board(&bid, &auth.0.identity_id)
+        .await?
+        .into_iter()
+        .collect();
+    Ok(Json(
+        notes
+            .iter()
+            .map(|n| {
+                let mut m = to_metadata(n);
+                m.shared = shared_ids.contains(&n.id.to_string());
+                m
+            })
+            .collect(),
+    ))
 }
 
 pub async fn create_note(

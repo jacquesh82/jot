@@ -95,6 +95,23 @@ impl Db {
             .collect())
     }
 
+    pub async fn list_shared_note_ids_for_board(
+        &self,
+        board_id: &str,
+        owner_identity_id: &str,
+    ) -> Result<Vec<String>, StorageError> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT ns.note_id FROM note_shares ns \
+             JOIN notes n ON n.id = ns.note_id \
+             WHERE n.board_id = ? AND ns.owner_identity_id = ?",
+        )
+        .bind(board_id)
+        .bind(owner_identity_id)
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.get::<String, _>("note_id")).collect())
+    }
+
     pub async fn delete_share(
         &self,
         note_id: &str,

@@ -158,12 +158,15 @@ a:hover { opacity: 0.8; }
   grid-area: footer;
   display: flex;
   align-items: center;
+  gap: 1rem;
   padding: 0 1rem;
   font-size: 11px;
   color: var(--text-muted);
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
+.footer-link { margin-left: auto; color: var(--text-muted); text-decoration: none; }
+.footer-link:hover { color: var(--text); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────── */
 button {
@@ -618,6 +621,7 @@ textarea.note-editor {
 /* ── Active note highlight ───────────────────────────────────────────────────── */
 .note-active { border-color: var(--accent) !important; }
 .note-card-active { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-dim); }
+.note-card-shared-badge { position: absolute; top: 0.35rem; right: 0.35rem; color: var(--accent); opacity: 0.7; }
 
 /* ── Register page ───────────────────────────────────────────────────────────── */
 .register-shell {

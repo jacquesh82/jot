@@ -2,6 +2,7 @@ pub mod auth;
 pub mod board_shares;
 pub mod boards;
 pub mod devices;
+pub mod export;
 pub mod health;
 pub mod identity;
 pub mod invites;
@@ -68,6 +69,7 @@ pub fn build(state: AppState) -> Router {
             "/boards/:id/shares/:identity_id",
             delete(board_shares::revoke_board_share),
         )
+        .route("/export", get(export::export_data))
         .route("/devices", get(devices::list_devices))
         .route(
             "/devices/:id",

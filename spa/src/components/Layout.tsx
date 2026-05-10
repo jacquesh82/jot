@@ -37,7 +37,10 @@ export function Layout({ children, activeRoute }: Props) {
 
       <main class="app-main">{children}</main>
 
-      <footer class="app-footer">jot · encrypted notes · v0.1.0</footer>
+      <footer class="app-footer">
+        jot · encrypted notes · v0.1.0
+        <a href="https://github.com/jacquesh82/jot" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a>
+      </footer>
     </div>
   );
 }
