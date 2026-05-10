@@ -27,8 +27,11 @@ enum Command {
         #[arg(long)]
         board: Option<uuid::Uuid>,
     },
-    /// List boards
-    Boards,
+    /// Manage boards (list, create)
+    Boards {
+        #[command(subcommand)]
+        cmd: commands::boards::BoardsCommand,
+    },
     /// Start the API server and register this device
     Serve {
         #[arg(long, default_value = "3000")]
@@ -44,7 +47,7 @@ async fn main() -> Result<(), CliError> {
     match cli.command {
         Command::Add { text, board } => commands::add::run(text, board).await,
         Command::List { board } => commands::list::run(board).await,
-        Command::Boards => commands::boards::run().await,
+        Command::Boards { cmd } => commands::boards::run(cmd).await,
         Command::Serve { port } => commands::serve::run(port).await,
         Command::Tui => tui::run_tui().await,
     }

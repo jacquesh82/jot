@@ -79,6 +79,21 @@ pub async fn run(port: u16) -> Result<(), CliError> {
         config.identity_id = Some(identity_id.to_string());
         config.save()?;
         println!("Device registered. Token saved to config.");
+
+        // Auto-create a default board so the user can start immediately
+        let default_board = jot_core::models::Board {
+            id: uuid::Uuid::new_v4(),
+            identity_id,
+            name: "Default".to_string(),
+            position: 0,
+            created_at: chrono::Utc::now(),
+        };
+        state
+            .db
+            .insert_board(&default_board)
+            .await
+            .map_err(|e| CliError::Server(e.to_string()))?;
+        println!("Default board created ({}).", default_board.id);
     }
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
