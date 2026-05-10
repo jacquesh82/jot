@@ -38,5 +38,6 @@ pub fn build(state: AppState) -> Router {
         .route("/devices", get(devices::list_devices))
         .route("/devices/:id", axum::routing::delete(devices::delete_device))
         .route("/devices/:id/rename", post(devices::rename_device))
+        .route("/ws", get(ws::ws_handler))
         .with_state(state)
 }
