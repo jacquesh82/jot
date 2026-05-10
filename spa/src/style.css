@@ -462,8 +462,8 @@ textarea.note-editor {
 }
 
 .note-panel.open {
-  width: 480px;
-  max-width: 60vw;
+  flex: 1;
+  min-width: 300px;
 }
 
 .note-panel-header {
