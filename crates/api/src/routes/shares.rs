@@ -101,8 +101,16 @@ pub async fn share_note(
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
     // Verify ownership
-    let note = state.db.get_note(note_uuid).await?.ok_or(ApiError::NotFound)?;
-    let board = state.db.get_board(note.board_id).await?.ok_or(ApiError::NotFound)?;
+    let note = state
+        .db
+        .get_note(note_uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let board = state
+        .db
+        .get_board(note.board_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     if board.identity_id.to_string() != claims.identity_id {
         return Err(ApiError::Unauthorized);
     }
@@ -136,8 +144,16 @@ pub async fn delete_share(
     let note_uuid = note_id
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
-    let note = state.db.get_note(note_uuid).await?.ok_or(ApiError::NotFound)?;
-    let board = state.db.get_board(note.board_id).await?.ok_or(ApiError::NotFound)?;
+    let note = state
+        .db
+        .get_note(note_uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let board = state
+        .db
+        .get_board(note.board_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     if board.identity_id.to_string() != claims.identity_id {
         return Err(ApiError::Unauthorized);
     }

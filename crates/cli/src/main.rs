@@ -74,11 +74,18 @@ async fn main() -> Result<(), CliError> {
     match cli.command {
         Command::Add { text, board } => commands::add::run(text, board).await,
         Command::New { what } => commands::new::run(what).await,
-        Command::List { board, boards, devices } => commands::list::run(board, boards, devices).await,
+        Command::List {
+            board,
+            boards,
+            devices,
+        } => commands::list::run(board, boards, devices).await,
         Command::Link { token } => commands::link::run(&token).await,
         Command::Read { id } => commands::read::run(id).await,
         Command::Whoami => commands::whoami::run().await,
-        Command::Serve { port, open_registration } => commands::serve::run(port, open_registration).await,
+        Command::Serve {
+            port,
+            open_registration,
+        } => commands::serve::run(port, open_registration).await,
         Command::Invite { label } => commands::invite::run(label).await,
         Command::Migrate => commands::migrate::run().await,
         Command::Tui => tui::run_tui().await,

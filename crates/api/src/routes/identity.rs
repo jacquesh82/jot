@@ -58,10 +58,7 @@ pub async fn update_me(
         .await?;
     if !updated {
         // Identity row doesn't exist yet — create it
-        state
-            .db
-            .insert_identity(&claims.identity_id, &name)
-            .await?;
+        state.db.insert_identity(&claims.identity_id, &name).await?;
     }
     Ok(Json(IdentityResponse {
         id: claims.identity_id,

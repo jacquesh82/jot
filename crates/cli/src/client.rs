@@ -164,7 +164,11 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
-    pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<serde_json::Value, CliError> {
+    pub async fn post_json(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner

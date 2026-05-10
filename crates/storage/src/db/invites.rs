@@ -38,7 +38,10 @@ impl Db {
         })
     }
 
-    pub async fn list_invite_tokens(&self, created_by: &str) -> Result<Vec<InviteToken>, StorageError> {
+    pub async fn list_invite_tokens(
+        &self,
+        created_by: &str,
+    ) -> Result<Vec<InviteToken>, StorageError> {
         let rows = sqlx::query(
             "SELECT token, created_by, label, created_at, revoked_at FROM invite_tokens WHERE created_by = ? ORDER BY created_at DESC",
         )
@@ -73,7 +76,11 @@ impl Db {
         }))
     }
 
-    pub async fn revoke_invite_token(&self, token: &str, revoked_by: &str) -> Result<bool, StorageError> {
+    pub async fn revoke_invite_token(
+        &self,
+        token: &str,
+        revoked_by: &str,
+    ) -> Result<bool, StorageError> {
         let now = Utc::now().to_rfc3339();
         let result = sqlx::query(
             "UPDATE invite_tokens SET revoked_at = ? WHERE token = ? AND created_by = ? AND revoked_at IS NULL",

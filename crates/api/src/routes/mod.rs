@@ -15,7 +15,7 @@ pub mod ws;
 
 use crate::state::AppState;
 use axum::{
-    routing::{get, patch, post, delete},
+    routing::{delete, get, patch, post},
     Router,
 };
 
@@ -23,7 +23,10 @@ pub fn build(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/register", post(register::register))
-        .route("/invites", get(invites::list_invites).post(invites::create_invite))
+        .route(
+            "/invites",
+            get(invites::list_invites).post(invites::create_invite),
+        )
         .route("/invites/:token", delete(invites::revoke_invite))
         .route("/auth/register", post(auth::register_identity))
         .route("/auth/device", post(auth::register_device))
@@ -31,7 +34,10 @@ pub fn build(state: AppState) -> Router {
         .route("/link/:token", get(link::get_link))
         .route("/link/confirm", post(link::confirm_link))
         .route("/link/status/:token", get(link::link_status))
-        .route("/identity/me", get(identity::get_me).patch(identity::update_me))
+        .route(
+            "/identity/me",
+            get(identity::get_me).patch(identity::update_me),
+        )
         .route("/identity/contacts", get(identity::get_recent_contacts))
         .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
@@ -55,7 +61,10 @@ pub fn build(state: AppState) -> Router {
             "/boards",
             get(boards::list_boards).post(boards::create_board),
         )
-        .route("/boards/shared", get(board_shares::get_boards_shared_with_me))
+        .route(
+            "/boards/shared",
+            get(board_shares::get_boards_shared_with_me),
+        )
         .route(
             "/boards/:id",
             patch(boards::patch_board).delete(boards::delete_board),
@@ -71,10 +80,7 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/export", get(export::export_data))
         .route("/devices", get(devices::list_devices))
-        .route(
-            "/devices/:id",
-            delete(devices::delete_device),
-        )
+        .route("/devices/:id", delete(devices::delete_device))
         .route("/devices/:id/rename", post(devices::rename_device))
         .route("/ws", get(ws::ws_handler))
         .fallback(spa::spa_handler)

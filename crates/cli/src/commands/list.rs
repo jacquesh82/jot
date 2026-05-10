@@ -33,9 +33,9 @@ pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(),
         Some(id) => id,
         None => {
             let bs = client.get_boards().await?;
-            bs.first()
-                .map(|b| b.id)
-                .ok_or_else(|| CliError::Server("no boards — run: jot new board \"My Board\"".into()))?
+            bs.first().map(|b| b.id).ok_or_else(|| {
+                CliError::Server("no boards — run: jot new board \"My Board\"".into())
+            })?
         }
     };
 
