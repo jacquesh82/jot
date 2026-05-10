@@ -24,7 +24,7 @@ pub async fn run(port: u16) -> Result<(), CliError> {
     let blobs_path = data_dir.join("blobs");
     std::fs::create_dir_all(&blobs_path)?;
 
-    let db_url = format!("sqlite:{}", db_path.display());
+    let db_url = format!("sqlite://{}", db_path.display());
     let db = Db::connect(&db_url)
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
