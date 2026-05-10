@@ -4,6 +4,7 @@ pub mod devices;
 pub mod health;
 pub mod link;
 pub mod notes;
+pub mod spa;
 pub mod ws;
 
 use crate::state::AppState;
@@ -45,5 +46,6 @@ pub fn build(state: AppState) -> Router {
         )
         .route("/devices/:id/rename", post(devices::rename_device))
         .route("/ws", get(ws::ws_handler))
+        .fallback(spa::spa_handler)
         .with_state(state)
 }
