@@ -150,23 +150,18 @@ pub async fn link_status(
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::{make_claims, sign_token};
-    use crate::test_helpers::test_app_with_state;
+    use crate::test_helpers::{test_app_with_state, test_token};
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
-    use uuid::Uuid;
 
     #[tokio::test]
     async fn link_flow_init_confirm_status() {
         let (app, state) = test_app_with_state().await;
 
         // Register a device to get a valid JWT for confirming
-        let device_id = Uuid::new_v4().to_string();
-        let identity_id = Uuid::new_v4().to_string();
-        let claims = make_claims(&device_id, &identity_id);
-        let jwt = sign_token(&claims, &state.signing_key_pem).unwrap();
+        let (jwt, ..) = test_token(&state).await;
 
         // Init
         let resp = app
