@@ -21,5 +21,13 @@ pub fn build(state: AppState) -> Router {
         .route("/link/:token", get(link::get_link))
         .route("/link/confirm", post(link::confirm_link))
         .route("/link/status/:token", get(link::link_status))
+        .route("/notes", get(notes::list_notes).post(notes::create_note))
+        .route(
+            "/notes/:id",
+            get(notes::get_note)
+                .delete(notes::delete_note)
+                .patch(notes::patch_note),
+        )
+        .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
         .with_state(state)
 }

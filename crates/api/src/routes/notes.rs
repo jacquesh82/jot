@@ -1,1 +1,193 @@
-// stub
+use crate::auth::middleware::AuthenticatedDevice;
+use crate::state::{AppState, WsEvent};
+use crate::ApiError;
+use axum::{
+    body::Bytes,
+    extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
+    Json,
+};
+use chrono::Utc;
+use jot_core::models::{Note, NoteType};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Deserialize)]
+pub struct NotesQuery {
+    pub board_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct CreateNoteBody {
+    pub note_type: String,
+    pub color: Option<String>,
+    pub board_id: Uuid,
+    pub position: Option<i32>,
+    pub blob_key: String,
+    pub size: i64,
+}
+
+#[derive(Deserialize)]
+pub struct PatchNoteBody {
+    pub position: Option<i32>,
+    pub color: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct NoteMetadata {
+    pub id: String,
+    pub note_type: String,
+    pub color: String,
+    pub board_id: String,
+    pub position: i32,
+    pub blob_key: String,
+    pub size: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+fn to_metadata(note: &Note) -> NoteMetadata {
+    NoteMetadata {
+        id: note.id.to_string(),
+        note_type: match note.note_type {
+            NoteType::Text => "text",
+            NoteType::Voice => "voice",
+            NoteType::Image => "image",
+        }
+        .to_string(),
+        color: note.color.clone(),
+        board_id: note.board_id.to_string(),
+        position: note.position,
+        blob_key: note.blob_key.clone(),
+        size: note.size,
+        created_at: note.created_at.to_rfc3339(),
+        updated_at: note.updated_at.to_rfc3339(),
+    }
+}
+
+fn parse_note_type(s: &str) -> Result<NoteType, ApiError> {
+    match s {
+        "text" => Ok(NoteType::Text),
+        "voice" => Ok(NoteType::Voice),
+        "image" => Ok(NoteType::Image),
+        _ => Err(ApiError::BadRequest(format!("unknown note_type: {s}"))),
+    }
+}
+
+pub async fn list_notes(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Query(q): Query<NotesQuery>,
+) -> Result<Json<Vec<NoteMetadata>>, ApiError> {
+    let notes = state.db.list_notes(q.board_id).await?;
+    Ok(Json(notes.iter().map(to_metadata).collect()))
+}
+
+pub async fn create_note(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Json(body): Json<CreateNoteBody>,
+) -> Result<StatusCode, ApiError> {
+    let now = Utc::now();
+    let note = Note {
+        id: Uuid::new_v4(),
+        note_type: parse_note_type(&body.note_type)?,
+        content: vec![],
+        thumbnail: None,
+        duration_ms: None,
+        color: body.color.unwrap_or_else(|| "#FFFFFF".to_string()),
+        board_id: body.board_id,
+        position: body.position.unwrap_or(0),
+        blob_key: body.blob_key,
+        size: body.size,
+        created_at: now,
+        updated_at: now,
+    };
+    state.db.insert_note(&note).await?;
+    let _ = state.ws_tx.send(WsEvent::NoteUpdated { id: note.id.to_string() });
+    Ok(StatusCode::CREATED)
+}
+
+pub async fn get_note(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<Json<NoteMetadata>, ApiError> {
+    let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    Ok(Json(to_metadata(&note)))
+}
+
+pub async fn delete_note(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    state.blobs.delete(&note.blob_key).await.ok();
+    state.db.delete_note(id).await?;
+    let _ = state.ws_tx.send(WsEvent::NoteDeleted { id: id.to_string() });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn patch_note(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PatchNoteBody>,
+) -> Result<StatusCode, ApiError> {
+    if let Some(pos) = body.position {
+        state.db.update_note_position(id, pos).await?;
+    }
+    if let Some(color) = body.color {
+        state.db.update_note_color(id, &color).await?;
+    }
+    let _ = state.ws_tx.send(WsEvent::NoteUpdated { id: id.to_string() });
+    Ok(StatusCode::OK)
+}
+
+pub async fn get_blob(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    let data = state.blobs.get(&note.blob_key).await?;
+    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data))
+}
+
+pub async fn put_blob(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    state.blobs.put(&note.blob_key, &body).await?;
+    Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::test_app;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn list_notes_without_token_returns_401() {
+        let app = test_app().await;
+        let board_id = Uuid::new_v4();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/notes?board_id={}", board_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+}
