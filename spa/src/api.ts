@@ -28,10 +28,43 @@ export async function fetchBoards(): Promise<Board[]> {
   return r.json();
 }
 
+export async function createBoard(name: string): Promise<Board> {
+  const r = await fetch(`${BASE}/boards`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ name, position: 0 }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function renameBoard(id: string, name: string): Promise<void> {
+  const r = await fetch(`${BASE}/boards/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function deleteBoard(id: string): Promise<void> {
+  const r = await fetch(`${BASE}/boards/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
 export async function fetchNotes(boardId: string): Promise<Note[]> {
   const r = await fetch(`${BASE}/notes?board_id=${boardId}`, { headers: authHeaders() });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
+}
+
+export async function fetchNoteContent(id: string): Promise<string> {
+  const r = await fetch(`${BASE}/notes/${id}/blob`, { headers: authHeaders() });
+  if (!r.ok) return "";
+  return r.text();
 }
 
 export async function createNote(boardId: string, text: string): Promise<{ id: string }> {
@@ -55,6 +88,15 @@ export async function createNote(boardId: string, text: string): Promise<{ id: s
     body: text,
   });
   return { id };
+}
+
+export async function updateNoteContent(id: string, text: string): Promise<void> {
+  const r = await fetch(`${BASE}/notes/${id}/blob`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token()}`, "Content-Type": "text/plain" },
+    body: text,
+  });
+  if (!r.ok) throw new Error(await r.text());
 }
 
 export async function deleteNote(id: string): Promise<void> {
