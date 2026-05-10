@@ -5,25 +5,27 @@ import { QrCode } from "./QrCode";
 
 const BASE = "";
 
-type Mode = "loading" | "open" | "invite_required" | "registration_closed" | "link" | "done";
+type Mode = "choice" | "loading" | "invite_required" | "registration_closed" | "link" | "done";
+
+// Read invite token from URL hash: #/register?invite=<token>
+function readHashInvite(): string | null {
+  const h = location.hash.replace(/^#\/?register\??/, "");
+  const m = h.match(/(?:^|&)invite=([^&]+)/);
+  return m ? m[1] : null;
+}
 
 export function DeviceRegister() {
-  const [mode, setMode] = useState<Mode>("loading");
+  const hashInvite = readHashInvite();
+  // If URL carries an invite token, skip the choice screen and attempt register immediately
+  const [mode, setMode] = useState<Mode>(hashInvite ? "loading" : "choice");
   const [inviteInput, setInviteInput] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Read invite token from URL hash: #/register?invite=<token>
-  const hashInvite = (() => {
-    const h = location.hash.replace(/^#\/?register\??/, "");
-    const m = h.match(/(?:^|&)invite=([^&]+)/);
-    return m ? m[1] : null;
-  })();
-
   useEffect(() => {
-    attemptRegister(hashInvite ?? undefined);
+    if (hashInvite) attemptRegister(hashInvite);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -98,6 +100,30 @@ export function DeviceRegister() {
           <strong style={{ fontSize: "1.1rem" }}>jot</strong>
         </div>
 
+        {mode === "choice" && (
+          <>
+            <h2 style={{ marginBottom: "0.5rem" }}>Welcome to jot</h2>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
+              What would you like to do?
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <button
+                class="btn-primary"
+                style={{ justifyContent: "center", padding: "0.6rem" }}
+                onClick={() => { setMode("loading"); attemptRegister(); }}
+              >
+                Create a new account
+              </button>
+              <button
+                style={{ justifyContent: "center", padding: "0.6rem" }}
+                onClick={initLink}
+              >
+                <Link size={14} /> Link an existing account
+              </button>
+            </div>
+          </>
+        )}
+
         {mode === "loading" && (
           <p style={{ color: "var(--text-muted)" }}>
             <RefreshCw size={13} style={{ display: "inline", animation: "spin 1s linear infinite" }} /> Connecting…
@@ -146,14 +172,12 @@ export function DeviceRegister() {
               </p>
             )}
 
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", marginTop: "0.25rem" }}>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                Already have an account?
-              </p>
-              <button onClick={initLink} style={{ fontSize: "0.85rem" }}>
-                <Link size={13} /> Link this device
-              </button>
-            </div>
+            <button
+              onClick={() => setMode("choice")}
+              style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}
+            >
+              ← Back
+            </button>
           </>
         )}
 
@@ -173,7 +197,7 @@ export function DeviceRegister() {
                   <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
                 </p>
                 <button
-                  onClick={() => { clearInterval(pollRef.current!); setLinkToken(null); setMode("invite_required"); }}
+                  onClick={() => { clearInterval(pollRef.current!); setLinkToken(null); setMode("choice"); }}
                   style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}
                 >
                   ← Back
