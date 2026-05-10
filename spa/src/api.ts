@@ -159,6 +159,22 @@ export async function lookupIdentity(name: string): Promise<IdentityInfo | null>
   return r.json();
 }
 
+export async function getRecentContacts(): Promise<IdentityInfo[]> {
+  const r = await authedFetch(`${BASE}/identity/contacts`);
+  if (!r.ok) return [];
+  return r.json();
+}
+
+const _ADJ = ["swift","bold","calm","dark","free","glad","keen","mild","neat","pure","rare","safe","tame","warm","wise","bright","crisp","deep","fair","gray","high","just","long","open","rich","slow","tall","true","vast","wild"];
+const _NOUN = ["alder","birch","cedar","daisy","elder","fern","grove","hazel","iris","larch","maple","oak","pine","reed","rose","sage","stone","thorn","vale","wave","brook","cliff","creek","dune","gale","mist","moon","peak","rain","star"];
+
+export function generateRandomName(): string {
+  const adj = _ADJ[Math.floor(Math.random() * _ADJ.length)];
+  const noun = _NOUN[Math.floor(Math.random() * _NOUN.length)];
+  const num = Math.floor(Math.random() * 900) + 100;
+  return `${adj}-${noun}-${num}`;
+}
+
 // ─── Board shares ─────────────────────────────────────────────────────────────
 
 export interface BoardShareEntry { shared_with_id: string; shared_with_name: string | null; created_at: string }

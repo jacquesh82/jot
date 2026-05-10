@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Link, Check, RefreshCw, X, Pencil, Save, Plus, Trash2, Copy } from "lucide-react";
-import { initLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, createInvite, listInvites, revokeInvite, type IdentityInfo, type InviteToken } from "../api";
+import { Link, Check, RefreshCw, X, Pencil, Save, Plus, Trash2, Copy, Shuffle } from "lucide-react";
+import { initLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, generateRandomName, createInvite, listInvites, revokeInvite, type IdentityInfo, type InviteToken } from "../api";
 import { QrCode } from "./QrCode";
 
 export function WhoamiPage() {
@@ -129,6 +129,9 @@ export function WhoamiPage() {
               <span class="info-val">{identity?.friendly_name ?? <em style={{ color: "var(--text-muted)" }}>not set</em>}</span>
               <button class="btn-icon" onClick={() => { setNameValue(identity?.friendly_name ?? ""); setEditingName(true); }} title="Edit name">
                 <Pencil size={13} />
+              </button>
+              <button class="btn-icon" onClick={() => { setNameValue(generateRandomName()); setEditingName(true); }} title="Generate random name">
+                <Shuffle size={13} />
               </button>
             </div>
           )}

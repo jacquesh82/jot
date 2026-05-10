@@ -3,7 +3,8 @@ import { Plus, Trash2, Search, LayoutList, LayoutGrid, X, Share2, UserPlus } fro
 import {
   fetchNotes, createNote, deleteNote, connectWs,
   fetchBoardShares, shareBoardWith, revokeBoardShare,
-  type Note, type WsEvent, type BoardShareEntry,
+  getRecentContacts,
+  type Note, type WsEvent, type BoardShareEntry, type IdentityInfo,
 } from "../api";
 import { notesView } from "../viewMode";
 import { selectedNoteId } from "../selectedNote";
@@ -22,6 +23,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
   const [shares, setShares] = useState<BoardShareEntry[]>([]);
   const [shareTarget, setShareTarget] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
+  const [recentContacts, setRecentContacts] = useState<IdentityInfo[]>([]);
   const stopWs = useRef<(() => void) | null>(null);
   const view = notesView.value;
 
@@ -57,6 +59,12 @@ export function NoteList({ boardId, readOnly = false }: Props) {
     try { setShares(await fetchBoardShares(boardId)); } catch {}
   }
 
+  async function loadRecentContacts() {
+    const contacts = await getRecentContacts();
+    const sharedIds = new Set(shares.map(s => s.shared_with_id));
+    setRecentContacts(contacts.filter(c => !sharedIds.has(c.id)));
+  }
+
   async function handleShare(e: Event) {
     e.preventDefault();
     if (!shareTarget.trim()) return;
@@ -76,7 +84,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
   function toggleSharing() {
     const next = !showSharing;
     setShowSharing(next);
-    if (next) loadShares();
+    if (next) { loadShares(); loadRecentContacts(); }
   }
 
   async function handleDelete(e: Event, id: string) {
@@ -135,6 +143,16 @@ export function NoteList({ boardId, readOnly = false }: Props) {
                 </ul>
               )
             }
+            {recentContacts.length > 0 && (
+              <div class="sharing-contacts">
+                {recentContacts.map((c) => (
+                  <button key={c.id} class="contact-chip" type="button"
+                    onClick={() => setShareTarget(c.friendly_name)}>
+                    {c.friendly_name}
+                  </button>
+                ))}
+              </div>
+            )}
             <form class="sharing-form" onSubmit={handleShare}>
               <input type="text" placeholder="Friendly name or UUID…" value={shareTarget}
                 onInput={(e) => setShareTarget((e.target as HTMLInputElement).value)} />

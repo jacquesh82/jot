@@ -597,6 +597,24 @@ textarea.note-editor {
 
 .sharing-error { font-size: 0.78rem; color: var(--danger); margin-top: 0.3rem; }
 
+.sharing-contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+.contact-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.contact-chip:hover { border-color: var(--accent); background: var(--accent-dim); }
+
 /* ── Active note highlight ───────────────────────────────────────────────────── */
 .note-active { border-color: var(--accent) !important; }
 .note-card-active { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-dim); }

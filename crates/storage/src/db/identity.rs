@@ -49,7 +49,7 @@ impl Db {
         name: &str,
     ) -> Result<Option<Identity>, StorageError> {
         let row = sqlx::query(
-            "SELECT id, friendly_name, created_at FROM identities WHERE friendly_name = ?",
+            "SELECT id, friendly_name, created_at FROM identities WHERE LOWER(friendly_name) = LOWER(?)",
         )
         .bind(name)
         .fetch_optional(&self.0)
@@ -59,6 +59,31 @@ impl Db {
             friendly_name: r.get("friendly_name"),
             created_at: r.get("created_at"),
         }))
+    }
+
+    pub async fn get_recent_contacts(
+        &self,
+        identity_id: &str,
+    ) -> Result<Vec<Identity>, StorageError> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT i.id, i.friendly_name, i.created_at \
+             FROM board_shares bs \
+             JOIN identities i ON bs.shared_with_id = i.id \
+             WHERE bs.owner_identity_id = ? \
+             ORDER BY bs.created_at DESC \
+             LIMIT 10",
+        )
+        .bind(identity_id)
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| Identity {
+                id: r.get("id"),
+                friendly_name: r.get("friendly_name"),
+                created_at: r.get("created_at"),
+            })
+            .collect())
     }
 
     pub async fn update_identity_name(
