@@ -2,3 +2,29 @@
 name = "cli"
 version.workspace = true
 edition.workspace = true
+
+[[bin]]
+name = "jot"
+path = "src/main.rs"
+
+[dependencies]
+jot-core = { path = "../core" }
+storage  = { path = "../storage" }
+api      = { path = "../api" }
+clap     = { version = "4", features = ["derive"] }
+tokio    = { version = "1", features = ["full"] }
+reqwest  = { version = "0.12", features = ["json"] }
+ratatui  = "0.26"
+crossterm = "0.27"
+serde    = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+dirs     = "5"
+toml     = "0.8"
+uuid     = { version = "1", features = ["v4"] }
+atty     = "0.2"
+chrono   = "0.4"
+hex      = "0.4"
+axum     = { version = "0.7", features = ["ws", "macros"] }
+ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
+tempfile = "3"
