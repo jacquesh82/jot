@@ -2,8 +2,10 @@ pub mod auth;
 pub mod boards;
 pub mod devices;
 pub mod health;
+pub mod identity;
 pub mod link;
 pub mod notes;
+pub mod shares;
 pub mod spa;
 pub mod ws;
 
@@ -22,7 +24,10 @@ pub fn build(state: AppState) -> Router {
         .route("/link/:token", get(link::get_link))
         .route("/link/confirm", post(link::confirm_link))
         .route("/link/status/:token", get(link::link_status))
+        .route("/identity/me", get(identity::get_me).patch(identity::update_me))
+        .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
+        .route("/notes/shared", get(shares::get_shared_with_me))
         .route(
             "/notes/:id",
             get(notes::get_note)
@@ -30,6 +35,14 @@ pub fn build(state: AppState) -> Router {
                 .patch(notes::patch_note),
         )
         .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
+        .route(
+            "/notes/:id/shares",
+            get(shares::list_shares).post(shares::share_note),
+        )
+        .route(
+            "/notes/:id/shares/:identity_id",
+            axum::routing::delete(shares::delete_share),
+        )
         .route(
             "/boards",
             get(boards::list_boards).post(boards::create_board),
