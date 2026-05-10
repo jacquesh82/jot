@@ -44,10 +44,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_note_shares(
-        &self,
-        note_id: &str,
-    ) -> Result<Vec<NoteShare>, StorageError> {
+    pub async fn get_note_shares(&self, note_id: &str) -> Result<Vec<NoteShare>, StorageError> {
         let rows = sqlx::query(
             "SELECT note_id, owner_identity_id, shared_with_id, encrypted_dek, created_at \
              FROM note_shares WHERE note_id = ?",
@@ -109,7 +106,10 @@ impl Db {
         .bind(owner_identity_id)
         .fetch_all(&self.0)
         .await?;
-        Ok(rows.into_iter().map(|r| r.get::<String, _>("note_id")).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| r.get::<String, _>("note_id"))
+            .collect())
     }
 
     pub async fn delete_share(
@@ -117,12 +117,11 @@ impl Db {
         note_id: &str,
         shared_with_id: &str,
     ) -> Result<bool, StorageError> {
-        let r =
-            sqlx::query("DELETE FROM note_shares WHERE note_id = ? AND shared_with_id = ?")
-                .bind(note_id)
-                .bind(shared_with_id)
-                .execute(&self.0)
-                .await?;
+        let r = sqlx::query("DELETE FROM note_shares WHERE note_id = ? AND shared_with_id = ?")
+            .bind(note_id)
+            .bind(shared_with_id)
+            .execute(&self.0)
+            .await?;
         Ok(r.rows_affected() > 0)
     }
 }

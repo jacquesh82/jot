@@ -1,4 +1,4 @@
-use crate::auth::{make_claims, sign_token, middleware::AuthenticatedDevice};
+use crate::auth::{make_claims, middleware::AuthenticatedDevice, sign_token};
 use crate::state::AppState;
 use crate::ApiError;
 use axum::{
@@ -212,6 +212,9 @@ mod tests {
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["status"], "confirmed");
-        assert!(json["jwt"].as_str().is_some(), "link_status should return a jwt when confirmed");
+        assert!(
+            json["jwt"].as_str().is_some(),
+            "link_status should return a jwt when confirmed"
+        );
     }
 }

@@ -77,8 +77,13 @@ pub async fn share_board(
         return Err(ApiError::BadRequest("cannot share with yourself".into()));
     }
 
-    state.db.share_board(&bid, &auth.0.identity_id, &target_id).await?;
-    Ok(Json(serde_json::json!({ "status": "shared", "shared_with_id": target_id })))
+    state
+        .db
+        .share_board(&bid, &auth.0.identity_id, &target_id)
+        .await?;
+    Ok(Json(
+        serde_json::json!({ "status": "shared", "shared_with_id": target_id }),
+    ))
 }
 
 pub async fn revoke_board_share(
@@ -102,7 +107,10 @@ pub async fn get_boards_shared_with_me(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
 ) -> Result<Json<Vec<SharedBoardResponse>>, ApiError> {
-    let boards = state.db.get_boards_shared_with_me(&auth.0.identity_id).await?;
+    let boards = state
+        .db
+        .get_boards_shared_with_me(&auth.0.identity_id)
+        .await?;
     Ok(Json(
         boards
             .into_iter()

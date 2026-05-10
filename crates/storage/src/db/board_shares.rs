@@ -38,7 +38,10 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_board_shares(&self, board_id: &str) -> Result<Vec<BoardShareEntry>, StorageError> {
+    pub async fn get_board_shares(
+        &self,
+        board_id: &str,
+    ) -> Result<Vec<BoardShareEntry>, StorageError> {
         let rows = sqlx::query(
             "SELECT bs.board_id, bs.shared_with_id, i.friendly_name AS shared_with_name, bs.created_at \
              FROM board_shares bs \
@@ -59,7 +62,10 @@ impl Db {
             .collect())
     }
 
-    pub async fn get_boards_shared_with_me(&self, identity_id: &str) -> Result<Vec<SharedBoardRow>, StorageError> {
+    pub async fn get_boards_shared_with_me(
+        &self,
+        identity_id: &str,
+    ) -> Result<Vec<SharedBoardRow>, StorageError> {
         let rows = sqlx::query(
             "SELECT bs.board_id, b.name AS board_name, bs.owner_identity_id, \
                     i.friendly_name AS owner_friendly_name \
@@ -82,19 +88,25 @@ impl Db {
             .collect())
     }
 
-    pub async fn delete_board_share(&self, board_id: &str, shared_with_id: &str) -> Result<bool, StorageError> {
-        let r = sqlx::query(
-            "DELETE FROM board_shares WHERE board_id = ? AND shared_with_id = ?",
-        )
-        .bind(board_id)
-        .bind(shared_with_id)
-        .execute(&self.0)
-        .await?;
+    pub async fn delete_board_share(
+        &self,
+        board_id: &str,
+        shared_with_id: &str,
+    ) -> Result<bool, StorageError> {
+        let r = sqlx::query("DELETE FROM board_shares WHERE board_id = ? AND shared_with_id = ?")
+            .bind(board_id)
+            .bind(shared_with_id)
+            .execute(&self.0)
+            .await?;
         Ok(r.rows_affected() > 0)
     }
 
     /// Returns true if identity_id owns or has been shared the board.
-    pub async fn can_access_board(&self, board_id: &str, identity_id: &str) -> Result<bool, StorageError> {
+    pub async fn can_access_board(
+        &self,
+        board_id: &str,
+        identity_id: &str,
+    ) -> Result<bool, StorageError> {
         let row = sqlx::query(
             "SELECT 1 FROM boards WHERE id = ? AND identity_id = ? \
              UNION ALL \
@@ -111,7 +123,11 @@ impl Db {
     }
 
     /// Returns true if identity_id owns the board.
-    pub async fn owns_board(&self, board_id: &str, identity_id: &str) -> Result<bool, StorageError> {
+    pub async fn owns_board(
+        &self,
+        board_id: &str,
+        identity_id: &str,
+    ) -> Result<bool, StorageError> {
         let row = sqlx::query("SELECT 1 FROM boards WHERE id = ? AND identity_id = ?")
             .bind(board_id)
             .bind(identity_id)

@@ -88,7 +88,9 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
 
         // Insert identity record with a friendly name derived from the identity UUID
         let friendly_name = format!("user-{}", &identity_id.to_string()[..8]);
-        state.db.insert_identity(&identity_id.to_string(), &friendly_name)
+        state
+            .db
+            .insert_identity(&identity_id.to_string(), &friendly_name)
             .await
             .map_err(|e| CliError::Server(e.to_string()))?;
         println!("Identity friendly name: {}", friendly_name);

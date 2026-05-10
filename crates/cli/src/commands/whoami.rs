@@ -8,7 +8,14 @@ pub async fn run() -> Result<(), CliError> {
             println!("Identity : {}", iid);
             println!("Device   : {}", did);
             println!("Server   : {}", config.server_url());
-            println!("Token    : {}", if config.token.is_some() { "present" } else { "absent" });
+            println!(
+                "Token    : {}",
+                if config.token.is_some() {
+                    "present"
+                } else {
+                    "absent"
+                }
+            );
         }
         _ => {
             eprintln!("Not registered — run: jot serve");

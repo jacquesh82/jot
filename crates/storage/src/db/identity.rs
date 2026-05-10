@@ -10,11 +10,7 @@ pub struct Identity {
 }
 
 impl Db {
-    pub async fn insert_identity(
-        &self,
-        id: &str,
-        friendly_name: &str,
-    ) -> Result<(), StorageError> {
+    pub async fn insert_identity(&self, id: &str, friendly_name: &str) -> Result<(), StorageError> {
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             "INSERT OR IGNORE INTO identities (id, friendly_name, created_at) VALUES (?, ?, ?)",
@@ -27,16 +23,11 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_identity_by_id(
-        &self,
-        id: &str,
-    ) -> Result<Option<Identity>, StorageError> {
-        let row = sqlx::query(
-            "SELECT id, friendly_name, created_at FROM identities WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.0)
-        .await?;
+    pub async fn get_identity_by_id(&self, id: &str) -> Result<Option<Identity>, StorageError> {
+        let row = sqlx::query("SELECT id, friendly_name, created_at FROM identities WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.0)
+            .await?;
         Ok(row.map(|r| Identity {
             id: r.get("id"),
             friendly_name: r.get("friendly_name"),
@@ -44,10 +35,7 @@ impl Db {
         }))
     }
 
-    pub async fn get_identity_by_name(
-        &self,
-        name: &str,
-    ) -> Result<Option<Identity>, StorageError> {
+    pub async fn get_identity_by_name(&self, name: &str) -> Result<Option<Identity>, StorageError> {
         let row = sqlx::query(
             "SELECT id, friendly_name, created_at FROM identities WHERE LOWER(friendly_name) = LOWER(?)",
         )
@@ -86,11 +74,7 @@ impl Db {
             .collect())
     }
 
-    pub async fn update_identity_name(
-        &self,
-        id: &str,
-        name: &str,
-    ) -> Result<bool, StorageError> {
+    pub async fn update_identity_name(&self, id: &str, name: &str) -> Result<bool, StorageError> {
         let r = sqlx::query("UPDATE identities SET friendly_name = ? WHERE id = ?")
             .bind(name)
             .bind(id)
