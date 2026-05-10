@@ -31,13 +31,19 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
     db.migrate()
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
+    let schema_version = db
+        .schema_version()
+        .await
+        .map_err(|e| CliError::Server(e.to_string()))?;
+    println!("Database schema: v{}", schema_version);
 
     let key_path = data_dir.join("server_key.pem");
     let (signing_pem, verifying_pem) = load_or_generate_keypair(&key_path)?;
 
     let blobs = Arc::new(LocalStore::new(&blobs_path));
     let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem)
-        .with_open_registration(open_registration);
+        .with_open_registration(open_registration)
+        .with_schema_version(schema_version);
     if open_registration {
         println!("Open registration enabled — anyone can create an account.");
     }

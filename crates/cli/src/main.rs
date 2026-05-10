@@ -62,6 +62,8 @@ enum Command {
         #[arg(long)]
         label: Option<String>,
     },
+    /// Apply pending database schema migrations
+    Migrate,
     /// Launch the TUI
     Tui,
 }
@@ -78,6 +80,7 @@ async fn main() -> Result<(), CliError> {
         Command::Whoami => commands::whoami::run().await,
         Command::Serve { port, open_registration } => commands::serve::run(port, open_registration).await,
         Command::Invite { label } => commands::invite::run(label).await,
+        Command::Migrate => commands::migrate::run().await,
         Command::Tui => tui::run_tui().await,
     }
 }
