@@ -1,4 +1,5 @@
 .dual-graph/
 .claude/
 PROJECT.MD
-website/
+website/dist/
+website/node_modules/

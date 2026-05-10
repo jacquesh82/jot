@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>jot — encrypted notes, zero friction</title>
+    <meta name="description" content="Universal encrypted notes. No email, no password. One binary, runs anywhere." />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <nav class="nav">
+      <span class="nav-logo">jot</span>
+      <a class="nav-link" href="https://github.com/jacquesh82/jot" target="_blank" rel="noopener">
+        GitHub
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2.5 9.5L9.5 2.5M9.5 2.5H4M9.5 2.5V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">v0.1 · open source</p>
+        <h1 class="hero-headline">
+          Notes without<br />the noise.
+        </h1>
+        <p class="hero-sub">
+          No email. No password. One binary.<br />
+          Encrypted, anonymous, runs everywhere.
+        </p>
+        <div class="hero-install">
+          <code class="install-cmd" id="installCmd">jot serve</code>
+          <button class="copy-btn" id="copyBtn" aria-label="Copy command">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+              <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M3 11H2.5C1.67 11 1 10.33 1 9.5V2.5C1 1.67 1 2.5 2.5 1H9.5C10.33 1 11 1.67 11 2.5V3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span class="copy-label">Copy</span>
+          </button>
+        </div>
+        <p class="hero-hint">Starts the server. Open <em>http://localhost:3000</em> to register.</p>
+      </div>
+      <div class="hero-glow" aria-hidden="true"></div>
+    </section>
+
+    <section class="features">
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔑</div>
+          <h3 class="feature-title">No account needed</h3>
+          <p class="feature-body">Identity is a local UUID with a friendly name. Link extra devices via QR code. No email, no password, no tracking.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3 class="feature-title">One binary</h3>
+          <p class="feature-body">CLI, API server, and web app compiled into a single statically linked executable. Zero runtime dependencies.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">Encrypted exports</h3>
+          <p class="feature-body">Export all your notes as JSON, optionally locked with AES-256-GCM + PBKDF2. End-to-end encryption in progress.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌍</div>
+          <h3 class="feature-title">Runs anywhere</h3>
+          <p class="feature-body">Static musl binaries for Linux and Windows. Native builds for macOS. Self-host in seconds, no Docker required.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🗂️</div>
+          <h3 class="feature-title">Boards &amp; sharing</h3>
+          <p class="feature-body">Organise notes into boards. Share boards or individual notes with other identities, with per-user access control.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-title">Unix-friendly CLI</h3>
+          <p class="feature-body">Pipe text straight into jot. Open your <code>$EDITOR</code>. Query from scripts. Feels like a tool, not an app.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="commands">
+      <h2 class="section-title">Get started in seconds</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot dot-red"></span>
+          <span class="dot dot-yellow"></span>
+          <span class="dot dot-green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">jot serve</span></div>
+          <div class="terminal-line output">Server running at http://localhost:3000</div>
+          <div class="terminal-line output muted">Database schema: up to date (v4)</div>
+          <div class="terminal-line spacer"></div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">echo "buy milk" | jot add</span></div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">jot list</span></div>
+          <div class="terminal-line output">buy milk <span class="muted">· default · just now</span></div>
+          <div class="terminal-line spacer"></div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">jot tui</span></div>
+          <div class="terminal-line output muted">Launches the interactive TUI</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="platforms">
+      <h2 class="section-title">Download</h2>
+      <p class="section-sub">Pre-built binaries for every major platform.</p>
+      <div class="platforms-grid">
+        <div class="platform-card">
+          <span class="platform-os">Linux</span>
+          <div class="platform-targets">
+            <span class="target">x86_64 (musl)</span>
+            <span class="target">ARM64 (musl)</span>
+          </div>
+        </div>
+        <div class="platform-card">
+          <span class="platform-os">macOS</span>
+          <div class="platform-targets">
+            <span class="target">Apple Silicon</span>
+            <span class="target">Intel</span>
+          </div>
+        </div>
+        <div class="platform-card">
+          <span class="platform-os">Windows</span>
+          <div class="platform-targets">
+            <span class="target">x86_64</span>
+          </div>
+        </div>
+      </div>
+      <p class="platforms-note">Or build from source: <code>cargo build --release -p cli</code></p>
+    </section>
+
+    <footer class="footer">
+      <p>
+        <span class="footer-logo">jot</span> · MIT License ·
+        <a href="https://github.com/jacquesh82/jot" target="_blank" rel="noopener">github.com/jacquesh82/jot</a>
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
