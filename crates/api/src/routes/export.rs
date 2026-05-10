@@ -6,6 +6,17 @@ use chrono::Utc;
 use jot_core::models::NoteType;
 use uuid::Uuid;
 
+#[utoipa::path(
+    get,
+    path = "/export",
+    tag = "export",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Full data export as JSON (all boards and notes with content)"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Identity not found")
+    )
+)]
 pub async fn export_data(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,

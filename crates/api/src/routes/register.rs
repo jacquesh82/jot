@@ -5,20 +5,32 @@ use axum::{extract::State, Json};
 use chrono::Utc;
 use jot_core::models::Device;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RegisterBody {
+    /// Invite token (required unless server runs with --open-registration)
     pub invite_token: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RegisterResponse {
     pub jwt: String,
     pub identity_id: String,
     pub device_id: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/register",
+    tag = "auth",
+    request_body = RegisterBody,
+    responses(
+        (status = 200, description = "Identity and device created", body = RegisterResponse),
+        (status = 403, description = "Invite required or invalid")
+    )
+)]
 pub async fn register(
     State(state): State<AppState>,
     Json(body): Json<RegisterBody>,

@@ -10,28 +10,49 @@ use chrono::Utc;
 use jot_core::models::{Device, LinkSession, LinkStatus};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct InitLinkResponse {
     pub token: String,
+    /// 4-digit PIN code to display to the user
     pub code: String,
     pub expires_at: String,
 }
 
-#[derive(Serialize)]
-pub struct LinkStatusResponse {
+#[derive(Serialize, ToSchema)]
+pub struct LinkInfoResponse {
+    pub token: String,
+    pub code: String,
+    /// "pending" | "confirmed" | "expired"
     pub status: String,
+    pub expires_at: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct LinkStatusResponse {
+    /// "pending" | "confirmed" | "expired"
+    pub status: String,
+    /// JWT for the new device, present only when status = "confirmed"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ConfirmLinkBody {
     pub token: String,
     pub device_name: Option<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/link/init",
+    tag = "link",
+    responses(
+        (status = 201, description = "Link session created", body = InitLinkResponse)
+    )
+)]
 pub async fn init_link(
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<InitLinkResponse>), ApiError> {
@@ -59,27 +80,46 @@ pub async fn init_link(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/link/{token}",
+    tag = "link",
+    params(("token" = String, Path, description = "Link session token")),
+    responses(
+        (status = 200, description = "Link session details", body = LinkInfoResponse),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn get_link(
     State(state): State<AppState>,
     Path(token): Path<String>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<LinkInfoResponse>, ApiError> {
     let link = state.db.get_link(&token).await?.ok_or(ApiError::NotFound)?;
     let status = match link.status {
         LinkStatus::Pending => "pending",
         LinkStatus::Confirmed => "confirmed",
         LinkStatus::Expired => "expired",
     };
-    Ok(Json(serde_json::json!({
-        "token": link.token,
-        "code": link.code,
-        "status": status,
-        "expires_at": link.expires_at.to_rfc3339(),
-    })))
+    Ok(Json(LinkInfoResponse {
+        token: link.token,
+        code: link.code,
+        status: status.to_string(),
+        expires_at: link.expires_at.to_rfc3339(),
+    }))
 }
 
-/// Confirm a pending link session. The authenticated device (CLI) approves the
-/// link, creating a new device record and signing a JWT for the new device.
-/// The JWT is stored in the link session so the initiator (SPA) can retrieve it.
+#[utoipa::path(
+    post,
+    path = "/link/confirm",
+    tag = "link",
+    security(("bearer_auth" = [])),
+    request_body = ConfirmLinkBody,
+    responses(
+        (status = 200, description = "Link confirmed, new device created"),
+        (status = 400, description = "Session not pending"),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn confirm_link(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -124,6 +164,16 @@ pub async fn confirm_link(
     Ok(Json(serde_json::json!({ "status": "confirmed" })))
 }
 
+#[utoipa::path(
+    get,
+    path = "/link/status/{token}",
+    tag = "link",
+    params(("token" = String, Path, description = "Link session token")),
+    responses(
+        (status = 200, description = "Link session status", body = LinkStatusResponse),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn link_status(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -160,10 +210,8 @@ mod tests {
     async fn link_flow_init_confirm_status() {
         let (app, state) = test_app_with_state().await;
 
-        // Register a device to get a valid JWT for confirming
         let (jwt, ..) = test_token(&state).await;
 
-        // Init
         let resp = app
             .clone()
             .oneshot(
@@ -181,7 +229,6 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let token = json["token"].as_str().unwrap().to_string();
 
-        // Confirm (authenticated)
         let confirm_body = serde_json::json!({ "token": token });
         let resp = app
             .clone()
@@ -198,7 +245,6 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        // Status returns jwt
         let resp = app
             .oneshot(
                 Request::builder()

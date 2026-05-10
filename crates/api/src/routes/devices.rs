@@ -8,9 +8,10 @@ use axum::{
 };
 use jot_core::models::Device;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DeviceResponse {
     pub id: String,
     pub name: String,
@@ -27,11 +28,21 @@ fn to_response(d: &Device) -> DeviceResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RenameBody {
     pub name: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/devices",
+    tag = "devices",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of registered devices for this identity", body = Vec<DeviceResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn list_devices(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -42,6 +53,17 @@ pub async fn list_devices(
     Ok(Json(devices.iter().map(to_response).collect()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/devices/{id}",
+    tag = "devices",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Device ID")),
+    responses(
+        (status = 204, description = "Device deleted (access revoked immediately)"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn delete_device(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -51,6 +73,18 @@ pub async fn delete_device(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    post,
+    path = "/devices/{id}/rename",
+    tag = "devices",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Device ID")),
+    request_body = RenameBody,
+    responses(
+        (status = 200, description = "Device renamed"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn rename_device(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,

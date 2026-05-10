@@ -6,19 +6,30 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct IdentityResponse {
     pub id: String,
     pub friendly_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateNameBody {
+    /// 1–40 characters, must be unique across all identities
     pub friendly_name: String,
 }
 
-/// GET /identity/me — returns the current identity's friendly name
+#[utoipa::path(
+    get,
+    path = "/identity/me",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Current identity", body = IdentityResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_me(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -34,7 +45,18 @@ pub async fn get_me(
     }))
 }
 
-/// PATCH /identity/me — update friendly name (must be unique)
+#[utoipa::path(
+    patch,
+    path = "/identity/me",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    request_body = UpdateNameBody,
+    responses(
+        (status = 200, description = "Identity updated", body = IdentityResponse),
+        (status = 400, description = "Name empty, too long, or already taken"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn update_me(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -46,7 +68,6 @@ pub async fn update_me(
             "friendly_name must be 1–40 characters".into(),
         ));
     }
-    // Check uniqueness (another identity already using that name)
     if let Some(existing) = state.db.get_identity_by_name(&name).await? {
         if existing.id != claims.identity_id {
             return Err(ApiError::BadRequest("friendly_name already taken".into()));
@@ -57,7 +78,6 @@ pub async fn update_me(
         .update_identity_name(&claims.identity_id, &name)
         .await?;
     if !updated {
-        // Identity row doesn't exist yet — create it
         state.db.insert_identity(&claims.identity_id, &name).await?;
     }
     Ok(Json(IdentityResponse {
@@ -66,7 +86,16 @@ pub async fn update_me(
     }))
 }
 
-/// GET /identity/contacts — recent identities this user has shared boards with
+#[utoipa::path(
+    get,
+    path = "/identity/contacts",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Recent contacts (identities shared with)", body = Vec<IdentityResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_recent_contacts(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -83,7 +112,18 @@ pub async fn get_recent_contacts(
     ))
 }
 
-/// GET /identity/lookup/:name — find an identity by friendly name (for sharing)
+#[utoipa::path(
+    get,
+    path = "/identity/lookup/{name}",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    params(("name" = String, Path, description = "Friendly name to look up (case-insensitive)")),
+    responses(
+        (status = 200, description = "Identity found", body = IdentityResponse),
+        (status = 404, description = "Not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn lookup_by_name(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
