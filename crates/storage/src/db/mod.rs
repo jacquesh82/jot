@@ -4,15 +4,20 @@ pub mod links;
 pub mod notes;
 
 use crate::StorageError;
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    SqlitePool,
+};
+use std::str::FromStr;
 
 pub struct Db(pub(crate) SqlitePool);
 
 impl Db {
     pub async fn connect(url: &str) -> Result<Self, StorageError> {
+        let options = SqliteConnectOptions::from_str(url)?.create_if_missing(true);
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
-            .connect(url)
+            .connect_with(options)
             .await?;
         Ok(Db(pool))
     }
