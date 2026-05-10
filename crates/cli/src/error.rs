@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
     #[error("not authenticated — run 'jot serve' first")]
