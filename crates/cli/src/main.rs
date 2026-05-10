@@ -27,13 +27,22 @@ enum Command {
         #[command(subcommand)]
         what: commands::new::NewCommand,
     },
-    /// List notes (default) or boards (--boards)
+    /// List notes (default), boards, or devices
     List {
         #[arg(long)]
         board: Option<uuid::Uuid>,
         #[arg(long, help = "List boards instead of notes")]
         boards: bool,
+        #[arg(long, help = "List registered devices")]
+        devices: bool,
     },
+    /// Read the content of a note
+    Read {
+        /// Note ID
+        id: uuid::Uuid,
+    },
+    /// Show current identity and device
+    Whoami,
     /// Start the API server and register this device
     Serve {
         #[arg(long, default_value = "3000")]
@@ -49,7 +58,9 @@ async fn main() -> Result<(), CliError> {
     match cli.command {
         Command::Add { text, board } => commands::add::run(text, board).await,
         Command::New { what } => commands::new::run(what).await,
-        Command::List { board, boards } => commands::list::run(board, boards).await,
+        Command::List { board, boards, devices } => commands::list::run(board, boards, devices).await,
+        Command::Read { id } => commands::read::run(id).await,
+        Command::Whoami => commands::whoami::run().await,
         Command::Serve { port } => commands::serve::run(port).await,
         Command::Tui => tui::run_tui().await,
     }

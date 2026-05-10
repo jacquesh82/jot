@@ -11,6 +11,13 @@ pub struct BoardSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub last_seen: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NoteSummary {
     pub id: Uuid,
     pub note_type: String,
@@ -127,6 +134,34 @@ impl JotClient {
             return Err(CliError::Server(blob_resp.status().to_string()));
         }
         Ok(note_id)
+    }
+
+    pub async fn get_blob(&self, note_id: Uuid) -> Result<Vec<u8>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/{}/blob", self.base_url, note_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.bytes().await?.to_vec())
+    }
+
+    pub async fn get_devices(&self) -> Result<Vec<DeviceSummary>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/devices", self.base_url))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
     }
 
     #[allow(dead_code)]
