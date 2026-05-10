@@ -1,7 +1,9 @@
 pub mod boards;
 pub mod devices;
+pub mod identity;
 pub mod links;
 pub mod notes;
+pub mod shares;
 
 use crate::StorageError;
 use sqlx::{

@@ -4,10 +4,11 @@ import { NoteList } from "./components/NoteList";
 import { DevicesPage } from "./components/DevicesPage";
 import { WhoamiPage } from "./components/WhoamiPage";
 import { StatsPage } from "./components/StatsPage";
+import { SharedNotesPage } from "./components/SharedNotesPage";
 import { DeviceRegister } from "./components/DeviceRegister";
 import { Folder } from "lucide-react";
 
-type RouteView = "home" | "board" | "devices" | "stats" | "whoami" | "register";
+type RouteView = "home" | "board" | "devices" | "stats" | "whoami" | "shared" | "register";
 interface Route { view: RouteView; boardId?: string }
 
 function parseHash(): Route {
@@ -17,6 +18,7 @@ function parseHash(): Route {
   if (h === "devices")  return { view: "devices" };
   if (h === "stats")    return { view: "stats" };
   if (h === "whoami")   return { view: "whoami" };
+  if (h === "shared")   return { view: "shared" };
   if (h.startsWith("board/")) return { view: "board", boardId: h.slice(6) };
   return { view: "home" };
 }
@@ -55,6 +57,8 @@ export function App() {
         <StatsPage />
       ) : route.view === "whoami" ? (
         <WhoamiPage />
+      ) : route.view === "shared" ? (
+        <SharedNotesPage />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: "0.75rem", color: "var(--text-muted)" }}>
           <Folder size={40} strokeWidth={1} />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Folder, Monitor, User, BarChart2, Plus, X } from "lucide-react";
+import { Folder, Monitor, User, BarChart2, Share2, Plus, X } from "lucide-react";
 import { fetchBoards, createBoard, type Board } from "../api";
 
 interface Props { activeRoute: string }
@@ -33,9 +33,10 @@ export function Sidebar({ activeRoute }: Props) {
   }
 
   const nav = [
-    { href: "#/devices", icon: <Monitor size={15} />, label: "Devices",    key: "devices" },
-    { href: "#/stats",   icon: <BarChart2 size={15} />, label: "Stats",    key: "stats"   },
-    { href: "#/whoami",  icon: <User size={15} />,      label: "Profile",  key: "whoami"  },
+    { href: "#/shared",  icon: <Share2 size={15} />,   label: "Shared",   key: "shared"  },
+    { href: "#/devices", icon: <Monitor size={15} />,  label: "Devices",  key: "devices" },
+    { href: "#/stats",   icon: <BarChart2 size={15} />, label: "Stats",   key: "stats"   },
+    { href: "#/whoami",  icon: <User size={15} />,     label: "Profile",  key: "whoami"  },
   ];
 
   return (
