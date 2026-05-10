@@ -69,6 +69,23 @@ pub async fn update_me(
     }))
 }
 
+/// GET /identity/contacts — recent identities this user has shared boards with
+pub async fn get_recent_contacts(
+    State(state): State<AppState>,
+    AuthenticatedDevice(claims): AuthenticatedDevice,
+) -> Result<Json<Vec<IdentityResponse>>, ApiError> {
+    let contacts = state.db.get_recent_contacts(&claims.identity_id).await?;
+    Ok(Json(
+        contacts
+            .into_iter()
+            .map(|c| IdentityResponse {
+                id: c.id,
+                friendly_name: c.friendly_name,
+            })
+            .collect(),
+    ))
+}
+
 /// GET /identity/lookup/:name — find an identity by friendly name (for sharing)
 pub async fn lookup_by_name(
     State(state): State<AppState>,

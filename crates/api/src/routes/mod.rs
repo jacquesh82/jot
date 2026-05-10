@@ -31,6 +31,7 @@ pub fn build(state: AppState) -> Router {
         .route("/link/confirm", post(link::confirm_link))
         .route("/link/status/:token", get(link::link_status))
         .route("/identity/me", get(identity::get_me).patch(identity::update_me))
+        .route("/identity/contacts", get(identity::get_recent_contacts))
         .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
         .route("/notes/shared", get(shares::get_shared_with_me))
