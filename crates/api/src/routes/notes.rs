@@ -88,7 +88,7 @@ pub async fn create_note(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
     Json(body): Json<CreateNoteBody>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let now = Utc::now();
     let note = Note {
         id: Uuid::new_v4(),
@@ -108,7 +108,10 @@ pub async fn create_note(
     let _ = state.ws_tx.send(WsEvent::NoteUpdated {
         id: note.id.to_string(),
     });
-    Ok(StatusCode::CREATED)
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": note.id.to_string() })),
+    ))
 }
 
 pub async fn get_note(
