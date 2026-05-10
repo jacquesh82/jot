@@ -6,9 +6,16 @@ pub mod link;
 pub mod notes;
 pub mod ws;
 
-use axum::Router;
 use crate::state::AppState;
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
-pub fn build(_state: AppState) -> Router {
+pub fn build(state: AppState) -> Router {
     Router::new()
+        .route("/health", get(health::health))
+        .route("/auth/register", post(auth::register_identity))
+        .route("/auth/device", post(auth::register_device))
+        .with_state(state)
 }
