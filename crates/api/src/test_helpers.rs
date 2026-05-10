@@ -52,3 +52,11 @@ pub async fn test_token(state: &AppState) -> (String, String, String) {
     let token = sign_token(&claims, &state.signing_key_pem).unwrap();
     (token, device_id.to_string(), identity_id.to_string())
 }
+
+/// Like `test_token` but also inserts an identity row so `/identity/me` works.
+pub async fn test_token_with_identity(state: &AppState) -> (String, String, String) {
+    let (token, device_id, identity_id) = test_token(state).await;
+    let name = format!("user-{}", &identity_id[..8]);
+    state.db.insert_identity(&identity_id, &name).await.unwrap();
+    (token, device_id, identity_id)
+}

@@ -6,6 +6,8 @@ pub mod state;
 
 #[cfg(test)]
 pub mod test_helpers;
+#[cfg(test)]
+mod tests;
 
 use axum::Router;
 pub use error::ApiError;
