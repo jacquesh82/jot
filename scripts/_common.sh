@@ -107,3 +107,32 @@ if ! command -v perl &>/dev/null; then
   echo "       Install it with: pacman -S perl | brew install perl | apt install perl" >&2
   exit 1
 fi
+
+# ── Swagger UI (pre-download for cross-compilation) ───────────────────────────
+# utoipa-swagger-ui's build script calls curl at build time; that curl is not
+# always reachable in cargo's subprocess environment when cross-compiling.
+# Pre-download the zip here (where curl is guaranteed in PATH) and point the
+# build script at the local file via SWAGGER_UI_DOWNLOAD_URL.
+
+SWAGGER_UI_VERSION="5.17.12"
+SWAGGER_UI_CACHE="$HOME/.local/share/swagger-ui"
+SWAGGER_UI_ZIP="$SWAGGER_UI_CACHE/v${SWAGGER_UI_VERSION}.zip"
+
+if [[ ! -f "$SWAGGER_UI_ZIP" ]]; then
+  echo ">> Downloading Swagger UI ${SWAGGER_UI_VERSION}"
+  mkdir -p "$SWAGGER_UI_CACHE"
+  if command -v curl &>/dev/null; then
+    curl -fsSL \
+      "https://github.com/swagger-api/swagger-ui/archive/refs/tags/v${SWAGGER_UI_VERSION}.zip" \
+      -o "$SWAGGER_UI_ZIP" \
+      || { echo "error: failed to download Swagger UI" >&2; exit 1; }
+  elif command -v wget &>/dev/null; then
+    wget -qO "$SWAGGER_UI_ZIP" \
+      "https://github.com/swagger-api/swagger-ui/archive/refs/tags/v${SWAGGER_UI_VERSION}.zip" \
+      || { echo "error: failed to download Swagger UI" >&2; exit 1; }
+  else
+    echo "error: curl and wget not found — cannot download Swagger UI" >&2; exit 1
+  fi
+fi
+
+export SWAGGER_UI_DOWNLOAD_URL="file://$SWAGGER_UI_ZIP"
