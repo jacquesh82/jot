@@ -8,6 +8,18 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" };
 }
 
+async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const r = await fetch(input, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers ?? {}) },
+  });
+  if (r.status === 401) {
+    localStorage.removeItem("token");
+    location.hash = "#/register";
+  }
+  return r;
+}
+
 export interface Board { id: string; name: string; position: number }
 export interface Note  { id: string; note_type: string; position: number }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
@@ -16,50 +28,48 @@ export type WsEvent = { event: string; [key: string]: unknown };
 // ─── Boards ───────────────────────────────────────────────────────────────────
 
 export async function fetchBoards(): Promise<Board[]> {
-  const r = await fetch(`${BASE}/boards`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/boards`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function createBoard(name: string): Promise<Board> {
-  const r = await fetch(`${BASE}/boards`, {
-    method: "POST", headers: authHeaders(),
-    body: JSON.stringify({ name, position: 0 }),
+  const r = await authedFetch(`${BASE}/boards`, {
+    method: "POST", body: JSON.stringify({ name, position: 0 }),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function renameBoard(id: string, name: string): Promise<void> {
-  const r = await fetch(`${BASE}/boards/${id}`, {
-    method: "PATCH", headers: authHeaders(),
-    body: JSON.stringify({ name }),
+  const r = await authedFetch(`${BASE}/boards/${id}`, {
+    method: "PATCH", body: JSON.stringify({ name }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function deleteBoard(id: string): Promise<void> {
-  const r = await fetch(`${BASE}/boards/${id}`, { method: "DELETE", headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/boards/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(await r.text());
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
 
 export async function fetchNotes(boardId: string): Promise<Note[]> {
-  const r = await fetch(`${BASE}/notes?board_id=${boardId}`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/notes?board_id=${boardId}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function fetchNoteContent(id: string): Promise<string> {
-  const r = await fetch(`${BASE}/notes/${id}/blob`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/notes/${id}/blob`);
   if (!r.ok) return "";
   return r.text();
 }
 
 export async function createNote(boardId: string, text: string): Promise<{ id: string }> {
-  const r = await fetch(`${BASE}/notes`, {
-    method: "POST", headers: authHeaders(),
+  const r = await authedFetch(`${BASE}/notes`, {
+    method: "POST",
     body: JSON.stringify({
       board_id: boardId, note_type: "text", color: null, position: 0,
       blob_key: crypto.randomUUID(),
@@ -68,46 +78,45 @@ export async function createNote(boardId: string, text: string): Promise<{ id: s
   });
   if (!r.ok) throw new Error(await r.text());
   const { id } = await r.json();
-  await fetch(`${BASE}/notes/${id}/blob`, {
+  await authedFetch(`${BASE}/notes/${id}/blob`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token()}`, "Content-Type": "text/plain" },
+    headers: { "Content-Type": "text/plain" },
     body: text,
   });
   return { id };
 }
 
 export async function updateNoteContent(id: string, text: string): Promise<void> {
-  const r = await fetch(`${BASE}/notes/${id}/blob`, {
+  const r = await authedFetch(`${BASE}/notes/${id}/blob`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token()}`, "Content-Type": "text/plain" },
+    headers: { "Content-Type": "text/plain" },
     body: text,
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  const r = await fetch(`${BASE}/notes/${id}`, { method: "DELETE", headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/notes/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(await r.text());
 }
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
 
 export async function fetchDevices(): Promise<DeviceSummary[]> {
-  const r = await fetch(`${BASE}/devices`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/devices`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function renameDevice(id: string, name: string): Promise<void> {
-  const r = await fetch(`${BASE}/devices/${id}/rename`, {
-    method: "POST", headers: authHeaders(),
-    body: JSON.stringify({ name }),
+  const r = await authedFetch(`${BASE}/devices/${id}/rename`, {
+    method: "POST", body: JSON.stringify({ name }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function deleteDevice(id: string): Promise<void> {
-  const r = await fetch(`${BASE}/devices/${id}`, { method: "DELETE", headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/devices/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(await r.text());
 }
 
@@ -130,22 +139,21 @@ export async function getLinkStatus(linkToken: string): Promise<{ status: string
 export interface IdentityInfo { id: string; friendly_name: string }
 
 export async function getIdentityMe(): Promise<IdentityInfo> {
-  const r = await fetch(`${BASE}/identity/me`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/identity/me`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function updateIdentityName(friendly_name: string): Promise<IdentityInfo> {
-  const r = await fetch(`${BASE}/identity/me`, {
-    method: "PATCH", headers: authHeaders(),
-    body: JSON.stringify({ friendly_name }),
+  const r = await authedFetch(`${BASE}/identity/me`, {
+    method: "PATCH", body: JSON.stringify({ friendly_name }),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function lookupIdentity(name: string): Promise<IdentityInfo | null> {
-  const r = await fetch(`${BASE}/identity/lookup/${encodeURIComponent(name)}`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/identity/lookup/${encodeURIComponent(name)}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -157,28 +165,25 @@ export interface ShareEntry { shared_with_id: string; shared_with_name: string |
 export interface SharedNote  { note_id: string; note_type: string; board_id: string; owner_identity_id: string; owner_friendly_name: string | null }
 
 export async function fetchShares(noteId: string): Promise<ShareEntry[]> {
-  const r = await fetch(`${BASE}/notes/${noteId}/shares`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/notes/${noteId}/shares`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function shareNote(noteId: string, target: string): Promise<void> {
-  const r = await fetch(`${BASE}/notes/${noteId}/shares`, {
-    method: "POST", headers: authHeaders(),
-    body: JSON.stringify({ target }),
+  const r = await authedFetch(`${BASE}/notes/${noteId}/shares`, {
+    method: "POST", body: JSON.stringify({ target }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function revokeShare(noteId: string, targetId: string): Promise<void> {
-  const r = await fetch(`${BASE}/notes/${noteId}/shares/${targetId}`, {
-    method: "DELETE", headers: authHeaders(),
-  });
+  const r = await authedFetch(`${BASE}/notes/${noteId}/shares/${targetId}`, { method: "DELETE" });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function getSharedWithMe(): Promise<SharedNote[]> {
-  const r = await fetch(`${BASE}/notes/shared`, { headers: authHeaders() });
+  const r = await authedFetch(`${BASE}/notes/shared`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
