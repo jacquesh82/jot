@@ -38,10 +38,23 @@ pub(crate) async fn test_db() -> Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[tokio::test]
-    async fn connect_and_migrate() {
+    async fn connect_and_migrate_memory() {
         let db = test_db().await;
         let _ = db;
+    }
+
+    #[tokio::test]
+    async fn connect_and_migrate_file() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        // File does not exist yet — must be created by connect()
+        assert!(!db_path.exists());
+        let url = format!("sqlite://{}", db_path.display());
+        let db = Db::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        assert!(db_path.exists());
     }
 }
