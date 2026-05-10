@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 
-const BASE = "/api";
+const BASE = "";
 
 export function DeviceRegister() {
   const [linkToken, setLinkToken] = useState<string | null>(null);

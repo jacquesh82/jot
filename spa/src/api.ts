@@ -1,4 +1,4 @@
-const BASE = "/api";
+const BASE = "";
 
 function token(): string {
   return localStorage.getItem("token") ?? "";
