@@ -178,6 +178,15 @@ body {
   color: var(--text-dim);
 }
 
+.hero-illustration {
+  margin: 48px auto 0;
+  width: 100%;
+  max-width: 440px;
+  opacity: 0;
+}
+
+.hero-illustration svg { width: 100%; height: auto; display: block; }
+
 /* ── Features ──────────────────────────────────────────────────────────────── */
 
 .features {
