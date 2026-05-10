@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Build ${{ matrix.bin }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            bin: jot-linux-x86_64
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            bin: jot-linux-aarch64
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+            bin: jot-windows-x86_64.exe
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            bin: jot-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            bin: jot-macos-aarch64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build SPA
+        run: bash scripts/build-spa.sh
+
+      - name: Install cargo-zigbuild
+        if: runner.os == 'Linux'
+        run: pip install ziglang && cargo install cargo-zigbuild
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: cargo zigbuild --release -p cli --target ${{ matrix.target }}
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: cargo build --release -p cli --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          SRC="target/${{ matrix.target }}/release/jot"
+          [ -f "${SRC}.exe" ] && SRC="${SRC}.exe"
+          mv "$SRC" "${{ matrix.bin }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.bin }}
+          path: ${{ matrix.bin }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: "jot-*"
+          generate_release_notes: true
