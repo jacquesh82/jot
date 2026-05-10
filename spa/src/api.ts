@@ -38,7 +38,14 @@ export async function createNote(boardId: string, text: string): Promise<{ id: s
   const r = await fetch(`${BASE}/notes`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ board_id: boardId, note_type: "text", color: null, position: 0 }),
+    body: JSON.stringify({
+      board_id: boardId,
+      note_type: "text",
+      color: null,
+      position: 0,
+      blob_key: crypto.randomUUID(),
+      size: new TextEncoder().encode(text).length,
+    }),
   });
   if (!r.ok) throw new Error(await r.text());
   const { id } = await r.json();
