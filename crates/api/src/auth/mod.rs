@@ -55,9 +55,7 @@ mod tests {
             .to_pkcs8_pem(Default::default())
             .unwrap()
             .to_string();
-        let verifying_pem = verifying_key
-            .to_public_key_pem(Default::default())
-            .unwrap();
+        let verifying_pem = verifying_key.to_public_key_pem(Default::default()).unwrap();
         (signing_pem, verifying_pem)
     }
 

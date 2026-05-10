@@ -133,8 +133,7 @@ mod tests {
 
         // Confirm
         let symkey_b64 = STANDARD.encode(b"fake-encrypted-symkey");
-        let confirm_body =
-            serde_json::json!({ "token": token, "encrypted_symkey": symkey_b64 });
+        let confirm_body = serde_json::json!({ "token": token, "encrypted_symkey": symkey_b64 });
         let resp = app
             .clone()
             .oneshot(

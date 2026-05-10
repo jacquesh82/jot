@@ -73,9 +73,9 @@ pub async fn create_board(
         created_at: Utc::now(),
     };
     state.db.insert_board(&board).await?;
-    let _ = state
-        .ws_tx
-        .send(WsEvent::BoardUpdated { id: board.id.to_string() });
+    let _ = state.ws_tx.send(WsEvent::BoardUpdated {
+        id: board.id.to_string(),
+    });
     Ok((StatusCode::CREATED, Json(to_response(&board))))
 }
 
@@ -113,7 +113,10 @@ pub async fn reorder_board(
     Json(items): Json<Vec<ReorderItem>>,
 ) -> Result<StatusCode, ApiError> {
     for item in &items {
-        state.db.update_note_position(item.note_id, item.position).await?;
+        state
+            .db
+            .update_note_position(item.note_id, item.position)
+            .await?;
     }
     Ok(StatusCode::OK)
 }
