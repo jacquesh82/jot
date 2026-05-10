@@ -74,6 +74,15 @@ impl Db {
             .await?;
         Ok(())
     }
+
+    pub async fn rename_device(&self, id: Uuid, name: &str) -> Result<(), StorageError> {
+        sqlx::query("UPDATE devices SET name = ? WHERE id = ?")
+            .bind(name)
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
