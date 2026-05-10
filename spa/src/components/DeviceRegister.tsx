@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { BookOpen, RefreshCw } from "lucide-react";
+import { getLinkStatus } from "../api";
+import { QrCode } from "./QrCode";
 
 const BASE = "";
 
@@ -9,9 +12,7 @@ export function DeviceRegister() {
 
   useEffect(() => {
     initLink();
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   async function initLink() {
@@ -20,43 +21,51 @@ export function DeviceRegister() {
       if (!r.ok) throw new Error(await r.text());
       const { token } = await r.json();
       setLinkToken(token);
-      startPolling(token);
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await getLinkStatus(token);
+          if (s.status === "confirmed" && s.jwt) {
+            clearInterval(pollRef.current!);
+            localStorage.setItem("token", s.jwt);
+            location.hash = "#/";
+          }
+        } catch {}
+      }, 2000);
     } catch (e) {
       setError(String(e));
     }
   }
 
-  function startPolling(token: string) {
-    pollRef.current = setInterval(async () => {
-      try {
-        const r = await fetch(`${BASE}/link/status/${token}`);
-        if (!r.ok) return;
-        const data = await r.json();
-        if (data.status === "confirmed" && data.jwt) {
-          clearInterval(pollRef.current!);
-          localStorage.setItem("token", data.jwt);
-          location.hash = "#/";
-        }
-      } catch {
-        // ignore poll errors
-      }
-    }, 2000);
-  }
-
-  if (error) return <div class="error">Error: {error}</div>;
+  const cmd = linkToken ? `jot link ${linkToken}` : "";
 
   return (
-    <div class="register">
-      <h2>Link this device</h2>
-      {linkToken ? (
-        <>
-          <p>Run this command in your terminal to link:</p>
-          <pre>jot link {linkToken}</pre>
-          <p class="hint">Waiting for confirmation…</p>
-        </>
-      ) : (
-        <p>Initialising…</p>
-      )}
+    <div class="register-shell" data-theme={document.documentElement.getAttribute("data-theme") ?? "light"}>
+      <div class="register-card">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+          <BookOpen size={20} />
+          <strong style={{ fontSize: "1.1rem" }}>jot</strong>
+        </div>
+
+        <h2>Link this device</h2>
+
+        {error ? (
+          <p style={{ color: "var(--danger)", marginTop: "0.75rem" }}>{error}</p>
+        ) : linkToken ? (
+          <>
+            <p style={{ marginTop: "0.75rem", marginBottom: "0.5rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              Run in your terminal:
+            </p>
+            <div class="register-cmd">{cmd}</div>
+            <QrCode text={cmd} size={160} />
+            <p class="register-hint" style={{ marginTop: "0.75rem" }}>
+              <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
+            </p>
+          </>
+        ) : (
+          <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>Initialising…</p>
+        )}
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

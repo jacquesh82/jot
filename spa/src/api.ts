@@ -8,19 +8,12 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" };
 }
 
-export interface Board {
-  id: string;
-  name: string;
-  position: number;
-}
-
-export interface Note {
-  id: string;
-  note_type: string;
-  position: number;
-}
-
+export interface Board { id: string; name: string; position: number }
+export interface Note  { id: string; note_type: string; position: number }
+export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
+
+// ─── Boards ───────────────────────────────────────────────────────────────────
 
 export async function fetchBoards(): Promise<Board[]> {
   const r = await fetch(`${BASE}/boards`, { headers: authHeaders() });
@@ -30,8 +23,7 @@ export async function fetchBoards(): Promise<Board[]> {
 
 export async function createBoard(name: string): Promise<Board> {
   const r = await fetch(`${BASE}/boards`, {
-    method: "POST",
-    headers: authHeaders(),
+    method: "POST", headers: authHeaders(),
     body: JSON.stringify({ name, position: 0 }),
   });
   if (!r.ok) throw new Error(await r.text());
@@ -40,20 +32,18 @@ export async function createBoard(name: string): Promise<Board> {
 
 export async function renameBoard(id: string, name: string): Promise<void> {
   const r = await fetch(`${BASE}/boards/${id}`, {
-    method: "PATCH",
-    headers: authHeaders(),
+    method: "PATCH", headers: authHeaders(),
     body: JSON.stringify({ name }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function deleteBoard(id: string): Promise<void> {
-  const r = await fetch(`${BASE}/boards/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
+  const r = await fetch(`${BASE}/boards/${id}`, { method: "DELETE", headers: authHeaders() });
   if (!r.ok) throw new Error(await r.text());
 }
+
+// ─── Notes ────────────────────────────────────────────────────────────────────
 
 export async function fetchNotes(boardId: string): Promise<Note[]> {
   const r = await fetch(`${BASE}/notes?board_id=${boardId}`, { headers: authHeaders() });
@@ -69,13 +59,9 @@ export async function fetchNoteContent(id: string): Promise<string> {
 
 export async function createNote(boardId: string, text: string): Promise<{ id: string }> {
   const r = await fetch(`${BASE}/notes`, {
-    method: "POST",
-    headers: authHeaders(),
+    method: "POST", headers: authHeaders(),
     body: JSON.stringify({
-      board_id: boardId,
-      note_type: "text",
-      color: null,
-      position: 0,
+      board_id: boardId, note_type: "text", color: null, position: 0,
       blob_key: crypto.randomUUID(),
       size: new TextEncoder().encode(text).length,
     }),
@@ -104,6 +90,43 @@ export async function deleteNote(id: string): Promise<void> {
   if (!r.ok) throw new Error(await r.text());
 }
 
+// ─── Devices ──────────────────────────────────────────────────────────────────
+
+export async function fetchDevices(): Promise<DeviceSummary[]> {
+  const r = await fetch(`${BASE}/devices`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function renameDevice(id: string, name: string): Promise<void> {
+  const r = await fetch(`${BASE}/devices/${id}/rename`, {
+    method: "POST", headers: authHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function deleteDevice(id: string): Promise<void> {
+  const r = await fetch(`${BASE}/devices/${id}`, { method: "DELETE", headers: authHeaders() });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+// ─── Link ─────────────────────────────────────────────────────────────────────
+
+export async function initLink(): Promise<{ token: string; code: string; expires_at: string }> {
+  const r = await fetch(`${BASE}/link/init`, { method: "POST" });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function getLinkStatus(linkToken: string): Promise<{ status: string; jwt?: string }> {
+  const r = await fetch(`${BASE}/link/status/${linkToken}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+
 export function connectWs(onEvent: (e: WsEvent) => void): () => void {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   let ws: WebSocket;
@@ -112,22 +135,20 @@ export function connectWs(onEvent: (e: WsEvent) => void): () => void {
 
   function connect() {
     ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token())}`);
-    ws.onmessage = (e) => {
-      try {
-        onEvent(JSON.parse(e.data as string));
-      } catch {
-        // ignore malformed frames
-      }
-    };
-    ws.onclose = () => {
-      if (!stopped) setTimeout(connect, Math.min((delay *= 2), 30000));
-    };
-    ws.onerror = () => ws.close();
+    ws.onmessage = (e) => { try { onEvent(JSON.parse(e.data as string)); } catch {} };
+    ws.onclose   = () => { if (!stopped) setTimeout(connect, Math.min((delay *= 2), 30000)); };
+    ws.onerror   = () => ws.close();
   }
-
   connect();
-  return () => {
-    stopped = true;
-    ws.close();
-  };
+  return () => { stopped = true; ws.close(); };
+}
+
+// ─── JWT helpers ──────────────────────────────────────────────────────────────
+
+export function decodeJwt(t?: string): { sub: string; identity_id: string } | null {
+  try {
+    const raw = t ?? token();
+    const payload = raw.split(".")[1];
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+  } catch { return null; }
 }
