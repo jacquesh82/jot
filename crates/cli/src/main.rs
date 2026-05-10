@@ -22,15 +22,17 @@ enum Command {
         #[arg(long)]
         board: Option<uuid::Uuid>,
     },
-    /// List notes in a board
+    /// Create a new object (board, …)
+    New {
+        #[command(subcommand)]
+        what: commands::new::NewCommand,
+    },
+    /// List notes (default) or boards (--boards)
     List {
         #[arg(long)]
         board: Option<uuid::Uuid>,
-    },
-    /// Manage boards (list, create)
-    Boards {
-        #[command(subcommand)]
-        cmd: commands::boards::BoardsCommand,
+        #[arg(long, help = "List boards instead of notes")]
+        boards: bool,
     },
     /// Start the API server and register this device
     Serve {
@@ -46,8 +48,8 @@ async fn main() -> Result<(), CliError> {
     let cli = Cli::parse();
     match cli.command {
         Command::Add { text, board } => commands::add::run(text, board).await,
-        Command::List { board } => commands::list::run(board).await,
-        Command::Boards { cmd } => commands::boards::run(cmd).await,
+        Command::New { what } => commands::new::run(what).await,
+        Command::List { board, boards } => commands::list::run(board, boards).await,
         Command::Serve { port } => commands::serve::run(port).await,
         Command::Tui => tui::run_tui().await,
     }
