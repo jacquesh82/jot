@@ -7,6 +7,7 @@ edition.workspace = true
 jot-core = { path = "../core" }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "chrono", "uuid"] }
 aws-sdk-s3 = "1.132"
+openssl = { version = "0.10", features = ["vendored"] }
 aws-config = "1"
 tokio = { version = "1", features = ["fs"] }
 async-trait = "0.1"
