@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
 # Sourced by cross-compilation build scripts — do not execute directly.
-# Ensures cargo, cargo-zigbuild, and zig are available, installing them if needed.
+# Ensures cargo, rustup, cargo-zigbuild, and zig are available.
 
-# ── cargo / rustup ────────────────────────────────────────────────────────────
+# ── PATH bootstrap ────────────────────────────────────────────────────────────
 
-# ~/.cargo/bin may not be in PATH in non-interactive shells
-export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.local/share/zig:$PATH"
+
+# ── cargo ─────────────────────────────────────────────────────────────────────
 
 if ! command -v cargo &>/dev/null; then
   echo "error: cargo not found — install Rust from https://rustup.rs" >&2; exit 1
+fi
+
+# ── rustup ────────────────────────────────────────────────────────────────────
+# Arch Linux installs Rust via pacman without rustup; cross-compilation needs it.
+
+if ! command -v rustup &>/dev/null; then
+  echo ">> rustup not found — installing via rustup.rs"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --no-modify-path
+  export PATH="$HOME/.cargo/bin:$PATH"
+  if ! command -v rustup &>/dev/null; then
+    echo "error: rustup install failed" >&2; exit 1
+  fi
 fi
 
 # ── cargo-zigbuild ────────────────────────────────────────────────────────────
@@ -20,18 +34,27 @@ fi
 
 # ── zig ───────────────────────────────────────────────────────────────────────
 
-# Common locations that may not be in PATH yet
-export PATH="$HOME/.local/bin:$HOME/.local/share/zig:$PATH"
-
 if ! command -v zig &>/dev/null; then
 
-  # Strategy 1: pipx — resolves the actual bin dir dynamically
+  # Strategy 1: pipx — check bin dir AND the venv (ziglang ≥ 0.16 changed layout)
   if command -v pipx &>/dev/null; then
     echo ">> Installing zig via pipx (ziglang)"
     pipx install ziglang 2>/dev/null || pipx upgrade ziglang 2>/dev/null || true
 
+    # Add the pipx bin dir (older ziglang puts a wrapper here)
     PIPX_BIN="$(pipx environment --value PIPX_BIN_DIR 2>/dev/null || echo "$HOME/.local/bin")"
     export PATH="$PIPX_BIN:$PATH"
+
+    # ziglang ≥ 0.16 dropped the console_scripts entry; find the binary in the venv
+    if ! command -v zig &>/dev/null; then
+      PIPX_HOME="$(pipx environment --value PIPX_HOME 2>/dev/null \
+                   || echo "$HOME/.local/share/pipx")"
+      ZIG_IN_VENV="$(find "$PIPX_HOME/venvs/ziglang" \
+                       -name 'zig' -type f -executable \
+                       ! -name '*.py' ! -name '*.pyc' \
+                     2>/dev/null | head -1)"
+      [[ -n "$ZIG_IN_VENV" ]] && export PATH="$(dirname "$ZIG_IN_VENV"):$PATH"
+    fi
   fi
 
   # Strategy 2: direct download from ziglang.org (no Python required)
@@ -45,9 +68,9 @@ if ! command -v zig &>/dev/null; then
       *)      echo "error: unsupported OS $(uname -s)" >&2; exit 1 ;;
     esac
     case "$(uname -m)" in
-      x86_64)         ZIG_ARCH="x86_64"  ;;
-      aarch64|arm64)  ZIG_ARCH="aarch64" ;;
-      *)              echo "error: unsupported arch $(uname -m)" >&2; exit 1 ;;
+      x86_64)        ZIG_ARCH="x86_64"  ;;
+      aarch64|arm64) ZIG_ARCH="aarch64" ;;
+      *)             echo "error: unsupported arch $(uname -m)" >&2; exit 1 ;;
     esac
 
     ZIG_TARBALL="zig-${ZIG_OS}-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz"
@@ -70,7 +93,7 @@ if ! command -v zig &>/dev/null; then
 
   if ! command -v zig &>/dev/null; then
     echo "error: zig not found after all install attempts." >&2
-    echo "       Try manually: pacman -S zig | brew install zig | https://ziglang.org/download/" >&2
+    echo "       Try: pacman -S zig | brew install zig | https://ziglang.org/download/" >&2
     exit 1
   fi
 fi
