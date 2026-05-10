@@ -445,8 +445,7 @@ textarea.note-editor {
 }
 
 .notes-workspace.panel-open .notes-pane {
-  max-width: 340px;
-  flex-shrink: 0;
+  /* note list keeps its natural flex: 1 width; panel width is fixed by drag */
 }
 
 /* ── Note panel (right sidebar) ──────────────────────────────────────────────── */
@@ -459,11 +458,38 @@ textarea.note-editor {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .note-panel.open {
-  flex: 1;
-  min-width: 300px;
+  /* width is set via inline style from panelWidth state */
+  min-width: 260px;
+}
+
+.note-panel.resizing { transition: none; user-select: none; }
+
+.note-panel-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.note-panel-resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 0.1s;
+}
+.note-panel-resize-handle:hover::after,
+.note-panel.resizing .note-panel-resize-handle::after {
+  background: var(--accent);
 }
 
 .note-panel-header {

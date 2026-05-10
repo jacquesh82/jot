@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { X, Save, Share2, Trash2, Eye, Code, UserPlus } from "lucide-react";
+
+const PANEL_WIDTH_KEY = "jot:panel-width";
+const DEFAULT_WIDTH = 480;
+const MIN_WIDTH = 260;
+const MAX_WIDTH = 1200;
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -27,6 +32,11 @@ export function NoteEditor({ onDeleted }: Props) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [showSharing, setShowSharing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const v = localStorage.getItem(PANEL_WIDTH_KEY);
+    return v ? parseInt(v, 10) : DEFAULT_WIDTH;
+  });
+  const [resizing, setResizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -102,13 +112,38 @@ export function NoteEditor({ onDeleted }: Props) {
     if (next && noteId) loadShares(noteId);
   }
 
+  function startResize(e: MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    let currentWidth = startWidth;
+    setResizing(true);
+
+    function onMove(ev: MouseEvent) {
+      currentWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + (startX - ev.clientX)));
+      setPanelWidth(currentWidth);
+    }
+    function onUp() {
+      setResizing(false);
+      localStorage.setItem(PANEL_WIDTH_KEY, String(currentWidth));
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   const html = DOMPurify.sanitize(marked.parse(draft) as string);
   const open = !!noteId;
 
   return (
-    <aside class={`note-panel ${open ? "open" : ""}`}>
+    <aside
+      class={`note-panel ${open ? "open" : ""} ${resizing ? "resizing" : ""}`}
+      style={open ? { width: `${panelWidth}px` } : undefined}
+    >
       {open && (
         <>
+          <div class="note-panel-resize-handle" onMouseDown={startResize} />
           {/* ── Header ── */}
           <div class="note-panel-header">
             <span class="note-panel-id">{noteId?.slice(0, 8)}</span>
