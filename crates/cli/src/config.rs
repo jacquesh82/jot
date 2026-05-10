@@ -30,17 +30,16 @@ impl Config {
     pub fn save(&self) -> Result<(), CliError> {
         let path = Self::config_path();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| CliError::Config(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| CliError::Config(e.to_string()))?;
         }
-        let contents = toml::to_string(self)
-            .map_err(|e| CliError::Config(e.to_string()))?;
-        std::fs::write(&path, contents)
-            .map_err(|e| CliError::Config(e.to_string()))
+        let contents = toml::to_string(self).map_err(|e| CliError::Config(e.to_string()))?;
+        std::fs::write(&path, contents).map_err(|e| CliError::Config(e.to_string()))
     }
 
     pub fn server_url(&self) -> &str {
-        self.server_url.as_deref().unwrap_or("http://127.0.0.1:3000")
+        self.server_url
+            .as_deref()
+            .unwrap_or("http://127.0.0.1:3000")
     }
 }
 
