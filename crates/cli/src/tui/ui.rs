@@ -11,7 +11,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
-        .split(frame.size());
+        .split(frame.area());
 
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
