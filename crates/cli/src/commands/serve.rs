@@ -71,8 +71,8 @@ pub async fn run(port: u16) -> Result<(), CliError> {
             .map_err(|e| CliError::Server(e.to_string()))?;
 
         let claims = make_claims(&device_id.to_string(), &identity_id.to_string());
-        let token = sign_token(&claims, &signing_pem)
-            .map_err(|e| CliError::Server(e.to_string()))?;
+        let token =
+            sign_token(&claims, &signing_pem).map_err(|e| CliError::Server(e.to_string()))?;
 
         config.token = Some(token);
         config.device_id = Some(device_id.to_string());
@@ -94,9 +94,7 @@ pub async fn run(port: u16) -> Result<(), CliError> {
     Ok(())
 }
 
-fn load_or_generate_keypair(
-    key_path: &std::path::Path,
-) -> Result<(String, String), CliError> {
+fn load_or_generate_keypair(key_path: &std::path::Path) -> Result<(String, String), CliError> {
     if key_path.exists() {
         let pem = std::fs::read_to_string(key_path)?;
         let signing_key = ed25519_dalek::SigningKey::from_pkcs8_pem(&pem)
