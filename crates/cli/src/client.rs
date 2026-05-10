@@ -46,6 +46,21 @@ impl JotClient {
             .ok_or(CliError::NotAuthenticated)
     }
 
+    pub async fn create_board(&self, name: &str) -> Result<BoardSummary, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/boards", self.base_url))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "name": name, "position": 0 }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn get_boards(&self) -> Result<Vec<BoardSummary>, CliError> {
         let auth = self.auth_header()?;
         let resp = self
