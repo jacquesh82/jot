@@ -8,7 +8,7 @@ pub async fn run() -> Result<(), CliError> {
 
     let db_path = data_dir.join("jot.db");
     if !db_path.exists() {
-        println!("No database found at {}", db_path.display());
+        println!("No database found at {}.", db_path.display());
         println!("Run `jot serve` first to create the database.");
         return Ok(());
     }
@@ -18,22 +18,13 @@ pub async fn run() -> Result<(), CliError> {
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
 
-    let before = db
-        .schema_version()
-        .await
-        .map_err(|e| CliError::Server(e.to_string()))?;
-
-    db.migrate()
-        .await
-        .map_err(|e| CliError::Server(e.to_string()))?;
-
-    let after = db
-        .schema_version()
+    let (before, after) = db
+        .migrate_with_version()
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
 
     if after > before {
-        println!("Migrated: v{} → v{}", before, after);
+        println!("Database schema migrated: v{} → v{}", before, after);
     } else {
         println!("Database schema already up to date (v{}).", after);
     }

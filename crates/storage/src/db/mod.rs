@@ -31,6 +31,15 @@ impl Db {
         Ok(())
     }
 
+    /// Run migrations and return (version_before, version_after).
+    /// Callers can compare the two values to decide whether to log a diff.
+    pub async fn migrate_with_version(&self) -> Result<(i64, i64), StorageError> {
+        let before = self.schema_version().await?;
+        sqlx::migrate!("./migrations").run(&self.0).await?;
+        let after = self.schema_version().await?;
+        Ok((before, after))
+    }
+
     /// Returns the version number of the highest successfully applied migration,
     /// or 0 if no migrations have been run yet.
     pub async fn schema_version(&self) -> Result<i64, StorageError> {

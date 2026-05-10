@@ -28,14 +28,16 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
     let db = Db::connect(&db_url)
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
-    db.migrate()
+    let (before, after) = db
+        .migrate_with_version()
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
-    let schema_version = db
-        .schema_version()
-        .await
-        .map_err(|e| CliError::Server(e.to_string()))?;
-    println!("Database schema: v{}", schema_version);
+    if after > before {
+        println!("Database schema migrated: v{} → v{}", before, after);
+    } else {
+        println!("Database schema: up to date (v{})", after);
+    }
+    let schema_version = after;
 
     let key_path = data_dir.join("server_key.pem");
     let (signing_pem, verifying_pem) = load_or_generate_keypair(&key_path)?;
