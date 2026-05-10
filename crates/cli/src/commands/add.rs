@@ -1,13 +1,12 @@
 use crate::client::JotClient;
 use crate::error::CliError;
-use atty::Stream;
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use uuid::Uuid;
 
 pub async fn run(text: Vec<String>, board: Option<Uuid>) -> Result<(), CliError> {
     let content = if !text.is_empty() {
         text.join(" ")
-    } else if !atty::is(Stream::Stdin) {
+    } else if !std::io::stdin().is_terminal() {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
         buf.trim().to_string()
