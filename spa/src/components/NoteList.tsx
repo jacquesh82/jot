@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Plus, Trash2, Search, LayoutList, LayoutGrid, X, Share2, UserPlus } from "lucide-react";
+import { Plus, Trash2, Search, LayoutList, LayoutGrid, X, Share2, UserPlus, Users } from "lucide-react";
 import {
   fetchNotes, createNote, deleteNote, connectWs,
   fetchBoardShares, shareBoardWith, revokeBoardShare,
@@ -201,6 +201,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
                       {note.id.slice(0, 8)}
                     </span>
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{note.note_type}</span>
+                    {note.shared && <Users size={12} style={{ color: "var(--accent)", flexShrink: 0 }} title="Shared" />}
                     {!readOnly && (
                       <div class="item-actions" onClick={(e) => e.stopPropagation()}>
                         <button class="btn-icon btn-danger" onClick={(e) => handleDelete(e, note.id)}>
@@ -227,6 +228,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
                       </button>
                     </div>
                   )}
+                  {note.shared && <Users size={11} class="note-card-shared-badge" title="Shared" />}
                   <span class="note-id">{note.id.slice(0, 8)}…</span>
                   <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{note.note_type}</span>
                 </div>
