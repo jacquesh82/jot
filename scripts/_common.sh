@@ -99,14 +99,11 @@ if ! command -v zig &>/dev/null; then
 fi
 
 # ── OpenSSL (vendored for musl/Windows cross-compilation) ─────────────────────
-# openssl-sys cannot locate a musl-compiled OpenSSL via pkg-config when
-# cross-compiling; build it from source using zig as the C compiler instead.
+# openssl-sys is built with the vendored feature in crates/storage/Cargo.toml;
+# perl is required by OpenSSL's configure script during that build.
 
 if ! command -v perl &>/dev/null; then
   echo "error: perl not found — required to build vendored OpenSSL" >&2
   echo "       Install it with: pacman -S perl | brew install perl | apt install perl" >&2
   exit 1
 fi
-
-export OPENSSL_STATIC=1
-export OPENSSL_VENDORED=1
