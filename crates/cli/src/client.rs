@@ -114,6 +114,7 @@ impl JotClient {
         Ok(note_id)
     }
 
+    #[allow(dead_code)]
     pub async fn delete_note(&self, note_id: Uuid) -> Result<(), CliError> {
         let auth = self.auth_header()?;
         let resp = self
@@ -128,6 +129,7 @@ impl JotClient {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn register_device(
         &self,
         device_id: Uuid,
