@@ -4,83 +4,84 @@
 
 ## What is jot?
 
-jot is a universal encrypted note system — think digital post-its. It is end-to-end encrypted, anonymous by default, and designed to feel like a Unix tool: simple, composable, pipeable.
+jot is a universal encrypted note system — think digital post-its. Designed to
+feel like a Unix tool: simple, composable, pipeable.
 
-- No email, no password — identity is a local UUID
-- The server never sees your note content
+- No email, no password — identity is a local UUID with a friendly name
 - One binary: CLI + API server + web SPA, statically linked
 - Runs anywhere: Linux (musl), macOS, Windows
+- Multi-user: open registration or invite-token gating
+- Board and note sharing with per-identity access control
 
-## Authentication
-
-jot has no email or password. Identity is generated locally on first run — a UUID and a cryptographic key pair stored in `~/.jot/`.
-
-**First device** — identity is created automatically:
-```bash
-jot server &        # start the server
-jot init            # generates identity + registers this device
-```
-
-**Linking a new device** — run on the existing device:
-```bash
-jot link
-# Displays a QR code + URL + 4-digit verification code
-#
-# Open this URL on a device already linked:
-# https://localhost:8080/link/a3f9k2
-#
-# Verification code: 7842
-#
-# Waiting... ⠋
-```
-
-On the new device, open the URL (or scan the QR), confirm the code — the symmetric key is transferred encrypted via X25519 ECDH and the new device syncs automatically.
-
-The device token (a JWT signed with Ed25519) is stored at `~/.jot/token` and sent as a Bearer token on every API request. It is managed automatically by the client.
-
-## Connecting to a server
-
-By default the client connects to `http://localhost:8080`. To point it at a remote or self-hosted instance, use any of the following methods (in order of precedence):
-
-**CLI flag** — per-command override:
-```bash
-jot --server https://jot.example.com list
-```
-
-**Environment variable** — session-wide:
-```bash
-export JOT_SERVER=https://jot.example.com
-jot list
-jot add "my note"
-```
-
-**Config file** — persistent, stored at `~/.jot/config.toml`:
-```toml
-server = "https://jot.example.com"
-```
-
-The config file is created automatically on first run. The `--server` flag always takes precedence over the environment variable, which always takes precedence over the config file.
+> **Note:** End-to-end encryption is designed (see `docs/sharing-crypto-design.md`)
+> but not yet implemented. Note content is currently stored in plaintext on the server.
 
 ## Quick start
 
 ```bash
 # Start the server (SQLite + local blob storage, zero dependencies)
-jot server
+jot serve
+
+# Open http://localhost:3000 in your browser — register a device via QR code
+# or use the CLI directly after serve has created a token in ~/.config/jot/
 
 # Add a note
-echo "faire les courses" | jot
+echo "faire les courses" | jot add
 
-# Add an image (type auto-detected from magic bytes)
-cat photo.jpg | jot
+# Add a note from your $EDITOR
+jot add
 
-# Add a voice note
-arecord -d 30 -f cd | oggenc - | jot
-
-# List notes
+# List notes (first board)
 jot list
 
-# Pipe-friendly JSON output
-jot list --format json | jq '.[] | select(.type == "voice")'
+# List boards
+jot list --boards
+
+# List registered devices
+jot list --devices
+
+# Read a note
+jot read <note-id>
+
+# Launch the TUI
+jot tui
+```
+
+## Authentication
+
+jot has no email or password. Identity is generated automatically on first
+`jot serve` — a UUID and a cryptographic key pair stored in `~/.config/jot/`.
+
+**First device** — identity is created automatically when you start the server:
+```bash
+jot serve        # generates identity, registers this device, prints token
+```
+
+**Linking a new device** — use the web UI (Profile → "Link a new device") or:
+```bash
+# On the new device, open the URL shown in the browser
+# The web UI displays a QR code and a jot link <token> command to run
+jot link <token>
+```
+
+**Registration modes:**
+
+```bash
+# Open registration — anyone can create an account
+jot serve --open-registration
+
+# Invite-only (default) — generate a token for someone
+jot invite --label "alice"
+# → prints a one-time URL: http://localhost:3000/#/register?invite=<token>
+```
+
+## Connecting to a server
+
+By default the client connects to `http://localhost:3000`. To point it at a
+remote instance, edit `~/.config/jot/config.toml`:
+
+```toml
+server = "https://jot.example.com"
 ```
 
 ## Architecture
@@ -90,7 +91,6 @@ graph TB
     subgraph Clients
         CLI["🖥️ jot CLI\nClap · Ratatui · pipe"]
         WEB["🌐 Web Browser\nSPA embarquée"]
-        MOBILE["📱 Flutter Android\nDart · FFI"]
     end
 
     subgraph BIN["⚙️ binaire jot  —  statiquement lié"]
@@ -100,10 +100,9 @@ graph TB
         CORE["crate core\nRustCrypto · modèles · HKDF"]
         DETECT["crate detect\nmagic bytes auto-type"]
         STORAGE["crate storage\nsqlx · SQLite · blobs"]
-        AI["crate ai\nLanceDB embeddings\n⚑ feature: pro-ai"]
     end
 
-    subgraph LOCAL["💾 ~/.jot/"]
+    subgraph LOCAL["💾 ~/.local/share/jot/"]
         DB[("jot.db\nSQLite")]
         BLOBS[("blobs/\nfichiers locaux")]
     end
@@ -112,13 +111,11 @@ graph TB
         S3SVC[("AWS S3\nCloudflare R2\nMinIO · …")]
     end
 
-    CLI -->|TTY / pipe| AXUM
+    CLI -->|pipe / HTTP| AXUM
     WEB -->|HTTP · WS| AXUM
-    MOBILE -->|FFI .so| CORE
 
     AXUM --> CORE
     AXUM --> EMBED
-    AXUM --> AI
     CORE --> DETECT
     CORE --> STORAGE
     STORAGE --> DB
@@ -126,33 +123,70 @@ graph TB
     STORAGE -->|JOT_STORAGE=s3| S3SVC
 ```
 
+## Web SPA
+
+The SPA is served directly by `jot serve` on the same port as the API.
+No separate web server needed.
+
+**Features:**
+- Board and note management (list view + card view)
+- Real-time updates via WebSocket
+- Resizable note editor panel (persisted in localStorage)
+- Board and note sharing with friendly-name resolution
+- Recent contacts shown as quick-pick chips when sharing
+- Dark / light theme toggle
+- Profile page: set/generate friendly name, link devices, manage invite tokens
+- Data export to JSON (plain or AES-256-GCM encrypted with PBKDF2)
+
+## CLI commands
+
+| Command | Description |
+|---|---|
+| `jot serve [--port N] [--open-registration]` | Start the API server |
+| `jot add [text…]` | Add a note (args, stdin pipe, or `$EDITOR`) |
+| `jot list [--boards] [--devices]` | List notes, boards, or devices |
+| `jot new board <name>` | Create a new board |
+| `jot read <id>` | Read a note's content |
+| `jot link <token>` | Approve a device link from the terminal |
+| `jot whoami` | Show current identity and device |
+| `jot invite [--label L]` | Generate an invite token |
+| `jot migrate` | Apply pending DB migrations without starting the server |
+| `jot tui` | Launch the interactive TUI |
+
+## Schema versioning
+
+jot uses `sqlx` migrations. The current schema version is displayed at startup
+and available at `GET /health`:
+
+```
+Database schema: up to date (v4)
+# or, after an update:
+Database schema migrated: v3 → v4
+```
+
+To pre-migrate before restarting a production server:
+```bash
+jot migrate
+```
+
 ## Stack
 
 | Component | Technology |
 |---|---|
 | Language | Rust (edition 2021) |
-| HTTP framework | Axum |
-| Database | SQLite via `sqlx` |
+| HTTP framework | Axum 0.7 |
+| Database | SQLite via `sqlx` 0.8 |
 | Blob storage | Local filesystem (default) or S3-compatible |
 | Cryptography | RustCrypto — X25519, AES-256-GCM, Ed25519, HKDF |
 | CLI | Clap v4 + Ratatui TUI |
-| TLS | rustls (no OpenSSL dependency) |
-| Web assets | rust-embed |
-| Mobile | Flutter (Android) + Rust FFI |
-| Pro AI | LanceDB (`--features pro-ai`) |
+| Web frontend | Preact 10 + Vite 6 + `@preact/signals` |
+| Web assets | `rust-embed` (SPA compiled into binary) |
 
-## Configuration
+## Data export
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `sqlite://~/.jot/jot.db` | SQLite file path |
-| `JOT_DATA_DIR` | `~/.jot/blobs` | Blob storage directory |
-| `JOT_STORAGE` | `local` | Blob backend: `local` or `s3` |
-| `S3_ENDPOINT` | — | S3-compatible URL (if `JOT_STORAGE=s3`) |
-| `S3_BUCKET` | — | S3 bucket name |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | S3 credentials |
-| `JOT_JWT_SECRET` | — | Device token signing secret |
-| `JOT_PORT` | `8080` | API listen port |
+From the Profile page in the SPA, you can export all your boards and notes as JSON.
+Optionally encrypt the export with a password (AES-256-GCM + PBKDF2, 200k rounds) —
+the file is saved as `.jote`.
 
 ## Platforms
 
@@ -160,9 +194,25 @@ graph TB
 |---|---|---|
 | `x86_64-unknown-linux-musl` | Linux x86_64 | Static (musl) |
 | `aarch64-unknown-linux-musl` | Linux ARM64 | Static (musl) |
+| `x86_64-pc-windows-gnu` | Windows x86_64 | Static |
 | `x86_64-apple-darwin` | macOS Intel | Dynamic |
 | `aarch64-apple-darwin` | macOS Apple Silicon | Dynamic |
-| `x86_64-pc-windows-msvc` | Windows x86_64 | Static |
+
+## Development
+
+```bash
+# Run the server in dev mode
+cargo run -p cli -- serve --open-registration
+
+# Run tests
+cargo test --workspace
+
+# Build the SPA (required before cargo build)
+cd spa && npm run build
+
+# Apply pending migrations without starting the server
+cargo run -p cli -- migrate
+```
 
 ## License
 
