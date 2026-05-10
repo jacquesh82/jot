@@ -1,12 +1,16 @@
+use crate::auth::{make_claims, sign_token};
 use crate::state::AppState;
 use axum::Router;
+use chrono::Utc;
 use ed25519_dalek::pkcs8::spki::EncodePublicKey;
 use ed25519_dalek::pkcs8::EncodePrivateKey;
 use ed25519_dalek::SigningKey;
+use jot_core::models::Device;
 use rand::rngs::OsRng;
 use std::sync::Arc;
 use storage::{Db, LocalStore};
 use tempfile::tempdir;
+use uuid::Uuid;
 
 pub async fn test_app_with_state() -> (Router, AppState) {
     let db = Db::connect("sqlite::memory:").await.unwrap();
@@ -27,4 +31,24 @@ pub async fn test_app_with_state() -> (Router, AppState) {
 
 pub async fn test_app() -> Router {
     test_app_with_state().await.0
+}
+
+/// Create a device row in the DB and return its signed JWT.
+/// Use this in tests instead of bare `make_claims` + `sign_token` so the
+/// middleware's device-existence check passes.
+pub async fn test_token(state: &AppState) -> (String, String, String) {
+    let device_id = Uuid::new_v4();
+    let identity_id = Uuid::new_v4();
+    let device = Device {
+        id: device_id,
+        identity_id,
+        pub_key_x25519: String::new(),
+        pub_key_ed25519: String::new(),
+        name: "test-device".to_string(),
+        last_seen: Utc::now(),
+    };
+    state.db.insert_device(&device).await.unwrap();
+    let claims = make_claims(&device_id.to_string(), &identity_id.to_string());
+    let token = sign_token(&claims, &state.signing_key_pem).unwrap();
+    (token, device_id.to_string(), identity_id.to_string())
 }

@@ -123,22 +123,17 @@ pub async fn reorder_board(
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::{make_claims, sign_token};
-    use crate::test_helpers::test_app_with_state;
+    use crate::test_helpers::{test_app_with_state, test_token};
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
     use http_body_util::BodyExt;
     use serde_json::json;
     use tower::ServiceExt;
-    use uuid::Uuid;
 
     #[tokio::test]
     async fn create_and_list_boards() {
         let (app, state) = test_app_with_state().await;
-        let identity_id = Uuid::new_v4().to_string();
-        let device_id = Uuid::new_v4().to_string();
-        let claims = make_claims(&device_id, &identity_id);
-        let token = sign_token(&claims, &state.signing_key_pem).unwrap();
+        let (token, ..) = test_token(&state).await;
 
         let create_body = json!({ "name": "My Board", "position": 0 });
         let resp = app

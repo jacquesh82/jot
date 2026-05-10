@@ -25,6 +25,16 @@ impl FromRequestParts<AppState> for AuthenticatedDevice {
             .ok_or(ApiError::Unauthorized)?;
 
         let claims = verify_token(token, &state.verifying_key_pem)?;
+
+        // Reject tokens belonging to deleted devices.
+        let device_id = claims.sub.parse().map_err(|_| ApiError::Unauthorized)?;
+        state
+            .db
+            .get_device(device_id)
+            .await
+            .map_err(|_| ApiError::Unauthorized)?
+            .ok_or(ApiError::Unauthorized)?;
+
         Ok(AuthenticatedDevice(claims))
     }
 }
