@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod board_shares;
 pub mod boards;
 pub mod devices;
 pub mod health;
@@ -52,11 +53,20 @@ pub fn build(state: AppState) -> Router {
             "/boards",
             get(boards::list_boards).post(boards::create_board),
         )
+        .route("/boards/shared", get(board_shares::get_boards_shared_with_me))
         .route(
             "/boards/:id",
             patch(boards::patch_board).delete(boards::delete_board),
         )
         .route("/boards/:id/reorder", patch(boards::reorder_board))
+        .route(
+            "/boards/:id/shares",
+            get(board_shares::list_board_shares).post(board_shares::share_board),
+        )
+        .route(
+            "/boards/:id/shares/:identity_id",
+            delete(board_shares::revoke_board_share),
+        )
         .route("/devices", get(devices::list_devices))
         .route(
             "/devices/:id",

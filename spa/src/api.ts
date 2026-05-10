@@ -159,6 +159,35 @@ export async function lookupIdentity(name: string): Promise<IdentityInfo | null>
   return r.json();
 }
 
+// ─── Board shares ─────────────────────────────────────────────────────────────
+
+export interface BoardShareEntry { shared_with_id: string; shared_with_name: string | null; created_at: string }
+export interface SharedBoard { board_id: string; board_name: string; owner_identity_id: string; owner_friendly_name: string | null }
+
+export async function fetchSharedBoards(): Promise<SharedBoard[]> {
+  const r = await authedFetch(`${BASE}/boards/shared`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchBoardShares(boardId: string): Promise<BoardShareEntry[]> {
+  const r = await authedFetch(`${BASE}/boards/${boardId}/shares`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function shareBoardWith(boardId: string, target: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/boards/${boardId}/shares`, {
+    method: "POST", body: JSON.stringify({ target }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function revokeBoardShare(boardId: string, targetId: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/boards/${boardId}/shares/${targetId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
 // ─── Invites ──────────────────────────────────────────────────────────────────
 
 export interface InviteToken { token: string; label: string; created_at: string; revoked_at: string | null }

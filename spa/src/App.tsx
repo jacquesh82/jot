@@ -8,7 +8,7 @@ import { SharedNotesPage } from "./components/SharedNotesPage";
 import { DeviceRegister } from "./components/DeviceRegister";
 import { Folder } from "lucide-react";
 
-type RouteView = "home" | "board" | "devices" | "stats" | "whoami" | "shared" | "register";
+type RouteView = "home" | "board" | "shared-board" | "devices" | "stats" | "whoami" | "shared" | "register";
 interface Route { view: RouteView; boardId?: string }
 
 function parseHash(): Route {
@@ -20,11 +20,13 @@ function parseHash(): Route {
   if (h === "whoami")   return { view: "whoami" };
   if (h === "shared")   return { view: "shared" };
   if (h.startsWith("board/")) return { view: "board", boardId: h.slice(6) };
+  if (h.startsWith("shared-board/")) return { view: "shared-board", boardId: h.slice(13) };
   return { view: "home" };
 }
 
 function activeRouteKey(route: Route): string {
   if (route.view === "board" && route.boardId) return `board/${route.boardId}`;
+  if (route.view === "shared-board" && route.boardId) return `shared-board/${route.boardId}`;
   return route.view;
 }
 
@@ -51,6 +53,8 @@ export function App() {
     <Layout activeRoute={activeRouteKey(route)}>
       {route.view === "board" && route.boardId ? (
         <NoteList boardId={route.boardId} />
+      ) : route.view === "shared-board" && route.boardId ? (
+        <NoteList boardId={route.boardId} readOnly />
       ) : route.view === "devices" ? (
         <DevicesPage />
       ) : route.view === "stats" ? (
