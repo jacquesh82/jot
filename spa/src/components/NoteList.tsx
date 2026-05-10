@@ -7,6 +7,7 @@ import {
 } from "../api";
 import { notesView } from "../viewMode";
 import { selectedNoteId } from "../selectedNote";
+import { refreshSidebar } from "../sidebarRefresh";
 import { NoteEditor } from "./NoteEditor";
 
 interface Props { boardId: string; readOnly?: boolean }
@@ -64,11 +65,12 @@ export function NoteList({ boardId, readOnly = false }: Props) {
       await shareBoardWith(boardId, shareTarget.trim());
       setShareTarget("");
       await loadShares();
+      refreshSidebar();
     } catch (e) { setShareError(String(e)); }
   }
 
   async function handleRevoke(targetId: string) {
-    try { await revokeBoardShare(boardId, targetId); await loadShares(); } catch {}
+    try { await revokeBoardShare(boardId, targetId); await loadShares(); refreshSidebar(); } catch {}
   }
 
   function toggleSharing() {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Folder, Monitor, User, BarChart2, Share2, Plus, X } from "lucide-react";
 import { fetchBoards, fetchSharedBoards, createBoard, type Board, type SharedBoard } from "../api";
+import { sidebarVersion } from "../sidebarRefresh";
 
 interface Props { activeRoute: string }
 
@@ -11,8 +12,9 @@ export function Sidebar({ activeRoute }: Props) {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const version = sidebarVersion.value;
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [version]);
   useEffect(() => { if (showCreate) inputRef.current?.focus(); }, [showCreate]);
 
   async function load() {
