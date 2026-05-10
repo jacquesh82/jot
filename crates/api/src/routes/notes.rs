@@ -77,9 +77,13 @@ fn parse_note_type(s: &str) -> Result<NoteType, ApiError> {
 
 pub async fn list_notes(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Query(q): Query<NotesQuery>,
 ) -> Result<Json<Vec<NoteMetadata>>, ApiError> {
+    let bid = q.board_id.to_string();
+    if !state.db.can_access_board(&bid, &auth.0.identity_id).await? {
+        return Err(ApiError::Forbidden("no access to this board".into()));
+    }
     let notes = state.db.list_notes(q.board_id).await?;
     Ok(Json(notes.iter().map(to_metadata).collect()))
 }
@@ -157,21 +161,29 @@ pub async fn patch_note(
 
 pub async fn get_blob(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    let bid = note.board_id.to_string();
+    if !state.db.can_access_board(&bid, &auth.0.identity_id).await? {
+        return Err(ApiError::Forbidden("no access to this board".into()));
+    }
     let data = state.blobs.get(&note.blob_key).await?;
     Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data))
 }
 
 pub async fn put_blob(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Path(id): Path<Uuid>,
     body: Bytes,
 ) -> Result<StatusCode, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    let bid = note.board_id.to_string();
+    if !state.db.owns_board(&bid, &auth.0.identity_id).await? {
+        return Err(ApiError::Forbidden("board is read-only".into()));
+    }
     state.blobs.put(&note.blob_key, &body).await?;
     Ok(StatusCode::OK)
 }

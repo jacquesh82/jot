@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Folder, Monitor, User, BarChart2, Share2, Plus, X } from "lucide-react";
-import { fetchBoards, createBoard, type Board } from "../api";
+import { fetchBoards, fetchSharedBoards, createBoard, type Board, type SharedBoard } from "../api";
 
 interface Props { activeRoute: string }
 
 export function Sidebar({ activeRoute }: Props) {
   const [boards, setBoards] = useState<Board[]>([]);
+  const [sharedBoards, setSharedBoards] = useState<SharedBoard[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -16,6 +17,7 @@ export function Sidebar({ activeRoute }: Props) {
 
   async function load() {
     try { setBoards(await fetchBoards()); } catch {}
+    try { setSharedBoards(await fetchSharedBoards()); } catch {}
   }
 
   async function handleCreate(e: Event) {
@@ -81,6 +83,24 @@ export function Sidebar({ activeRoute }: Props) {
           </div>
         )}
       </div>
+
+      {sharedBoards.length > 0 && (
+        <>
+          <div class="sidebar-divider" />
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Shared boards</div>
+            {sharedBoards.map((b) => {
+              const active = activeRoute === `shared-board/${b.board_id}`;
+              return (
+                <a key={b.board_id} class={`sidebar-item ${active ? "active" : ""}`} href={`#/shared-board/${b.board_id}`}>
+                  <Share2 size={14} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{b.board_name}</span>
+                </a>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div class="sidebar-divider" />
 
