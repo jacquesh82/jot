@@ -12,7 +12,7 @@ use std::sync::Arc;
 use storage::{Db, LocalStore};
 use uuid::Uuid;
 
-pub async fn run(port: u16) -> Result<(), CliError> {
+pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
     let mut config = Config::load();
 
     let data_dir = dirs::data_dir()
@@ -36,7 +36,11 @@ pub async fn run(port: u16) -> Result<(), CliError> {
     let (signing_pem, verifying_pem) = load_or_generate_keypair(&key_path)?;
 
     let blobs = Arc::new(LocalStore::new(&blobs_path));
-    let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem);
+    let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem)
+        .with_open_registration(open_registration);
+    if open_registration {
+        println!("Open registration enabled — anyone can create an account.");
+    }
     let router = api::build_router(state.clone());
 
     if config.token.is_none() {

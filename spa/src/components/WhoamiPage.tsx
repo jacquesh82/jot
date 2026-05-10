@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Link, Check, RefreshCw, X, Pencil, Save } from "lucide-react";
-import { initLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, type IdentityInfo } from "../api";
+import { Link, Check, RefreshCw, X, Pencil, Save, Plus, Trash2, Copy } from "lucide-react";
+import { initLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, createInvite, listInvites, revokeInvite, type IdentityInfo, type InviteToken } from "../api";
 import { QrCode } from "./QrCode";
 
 export function WhoamiPage() {
@@ -13,10 +13,14 @@ export function WhoamiPage() {
   const [linked, setLinked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [invites, setInvites] = useState<InviteToken[]>([]);
+  const [inviteLabel, setInviteLabel] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadIdentity(); }, []);
+  useEffect(() => { loadIdentity(); loadInvites(); }, []);
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
 
   async function loadIdentity() {
@@ -52,6 +56,32 @@ export function WhoamiPage() {
       }, 2000);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
+  }
+
+  async function loadInvites() {
+    try { setInvites(await listInvites()); } catch {}
+  }
+
+  async function handleCreateInvite(e: Event) {
+    e.preventDefault();
+    setInviteError(null);
+    try {
+      await createInvite(inviteLabel.trim());
+      setInviteLabel("");
+      await loadInvites();
+    } catch (e) { setInviteError(String(e)); }
+  }
+
+  async function handleRevokeInvite(token: string) {
+    try { await revokeInvite(token); await loadInvites(); } catch {}
+  }
+
+  function copyInviteUrl(token: string) {
+    const url = `${location.origin}/#/register?invite=${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    });
   }
 
   function cancelLink() {
@@ -134,6 +164,60 @@ export function WhoamiPage() {
           <button onClick={cancelLink}>Close</button>
         </div>
       )}
+
+      {/* ── Invitations ── */}
+      <div style={{ marginTop: "1.5rem" }}>
+        <div class="page-title" style={{ marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: "1rem" }}>Invitations</h2>
+        </div>
+
+        {invites.filter(i => !i.revoked_at).length > 0 && (
+          <ul class="item-list" style={{ marginBottom: "0.75rem" }}>
+            {invites.filter(i => !i.revoked_at).map((inv) => (
+              <li key={inv.token} class="item-row">
+                <div class="item-row-header">
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                      {inv.token.slice(0, 8)}…
+                    </div>
+                    {inv.label && (
+                      <div style={{ fontSize: "0.78rem", color: "var(--text)" }}>{inv.label}</div>
+                    )}
+                  </div>
+                  <div class="item-actions" style={{ opacity: 1, display: "flex", gap: "0.3rem" }}>
+                    <button
+                      class="btn-icon"
+                      title={copiedToken === inv.token ? "Copied!" : "Copy invite URL"}
+                      onClick={() => copyInviteUrl(inv.token)}
+                    >
+                      {copiedToken === inv.token ? <Check size={13} /> : <Copy size={13} />}
+                    </button>
+                    <button class="btn-icon btn-danger" title="Revoke" onClick={() => handleRevokeInvite(inv.token)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {invites.filter(i => !i.revoked_at).length === 0 && (
+          <p class="empty-msg" style={{ padding: "0.5rem 0", textAlign: "left" }}>No active invitations.</p>
+        )}
+
+        <form style={{ display: "flex", gap: "0.4rem" }} onSubmit={handleCreateInvite}>
+          <input
+            type="text"
+            placeholder="Label (optional)…"
+            value={inviteLabel}
+            onInput={(e) => setInviteLabel((e.target as HTMLInputElement).value)}
+            style={{ flex: 1 }}
+          />
+          <button class="btn-primary" type="submit"><Plus size={13} /> New invite</button>
+        </form>
+        {inviteError && <p style={{ color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.3rem" }}>{inviteError}</p>}
+      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

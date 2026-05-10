@@ -3,21 +3,26 @@ pub mod boards;
 pub mod devices;
 pub mod health;
 pub mod identity;
+pub mod invites;
 pub mod link;
 pub mod notes;
+pub mod register;
 pub mod shares;
 pub mod spa;
 pub mod ws;
 
 use crate::state::AppState;
 use axum::{
-    routing::{get, patch, post},
+    routing::{get, patch, post, delete},
     Router,
 };
 
 pub fn build(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
+        .route("/register", post(register::register))
+        .route("/invites", get(invites::list_invites).post(invites::create_invite))
+        .route("/invites/:token", delete(invites::revoke_invite))
         .route("/auth/register", post(auth::register_identity))
         .route("/auth/device", post(auth::register_device))
         .route("/link/init", post(link::init_link))
@@ -41,7 +46,7 @@ pub fn build(state: AppState) -> Router {
         )
         .route(
             "/notes/:id/shares/:identity_id",
-            axum::routing::delete(shares::delete_share),
+            delete(shares::delete_share),
         )
         .route(
             "/boards",
@@ -55,7 +60,7 @@ pub fn build(state: AppState) -> Router {
         .route("/devices", get(devices::list_devices))
         .route(
             "/devices/:id",
-            axum::routing::delete(devices::delete_device),
+            delete(devices::delete_device),
         )
         .route("/devices/:id/rename", post(devices::rename_device))
         .route("/ws", get(ws::ws_handler))
