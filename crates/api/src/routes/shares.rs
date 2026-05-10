@@ -7,22 +7,23 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ShareEntry {
     pub shared_with_id: String,
     pub shared_with_name: Option<String>,
     pub created_at: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ShareBody {
     /// Target identity UUID or friendly name
     pub target: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SharedNoteEntry {
     pub note_id: String,
     pub note_type: String,
@@ -31,7 +32,16 @@ pub struct SharedNoteEntry {
     pub owner_friendly_name: Option<String>,
 }
 
-/// GET /notes/shared — notes shared with the current identity
+#[utoipa::path(
+    get,
+    path = "/notes/shared",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Notes shared with the current identity", body = Vec<SharedNoteEntry>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_shared_with_me(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -50,7 +60,18 @@ pub async fn get_shared_with_me(
     ))
 }
 
-/// GET /notes/:id/shares — list who a note is shared with
+#[utoipa::path(
+    get,
+    path = "/notes/{id}/shares",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(("id" = String, Path, description = "Note ID")),
+    responses(
+        (status = 200, description = "List of share entries for this note", body = Vec<ShareEntry>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Note not found")
+    )
+)]
 pub async fn list_shares(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -59,7 +80,6 @@ pub async fn list_shares(
     let note_uuid = note_id
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
-    // Verify ownership: note's board must belong to caller's identity
     let note = state
         .db
         .get_note(note_uuid)
@@ -90,7 +110,20 @@ pub async fn list_shares(
     Ok(Json(entries))
 }
 
-/// POST /notes/:id/share — share a note with another identity
+#[utoipa::path(
+    post,
+    path = "/notes/{id}/shares",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(("id" = String, Path, description = "Note ID")),
+    request_body = ShareBody,
+    responses(
+        (status = 201, description = "Note shared"),
+        (status = 400, description = "Invalid target or sharing with yourself"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Note or target identity not found")
+    )
+)]
 pub async fn share_note(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -100,7 +133,6 @@ pub async fn share_note(
     let note_uuid = note_id
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
-    // Verify ownership
     let note = state
         .db
         .get_note(note_uuid)
@@ -114,7 +146,6 @@ pub async fn share_note(
     if board.identity_id.to_string() != claims.identity_id {
         return Err(ApiError::Unauthorized);
     }
-    // Resolve target: try as UUID first, then as friendly name
     let target_id = if let Ok(uuid) = Uuid::parse_str(&body.target) {
         uuid.to_string()
     } else {
@@ -135,7 +166,21 @@ pub async fn share_note(
     Ok(StatusCode::CREATED)
 }
 
-/// DELETE /notes/:id/shares/:identity_id — revoke sharing
+#[utoipa::path(
+    delete,
+    path = "/notes/{id}/shares/{identity_id}",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(
+        ("id" = String, Path, description = "Note ID"),
+        ("identity_id" = String, Path, description = "Identity to revoke access from")
+    ),
+    responses(
+        (status = 204, description = "Share revoked"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Note not found")
+    )
+)]
 pub async fn delete_share(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,

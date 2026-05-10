@@ -9,27 +9,28 @@ use axum::{
 use chrono::Utc;
 use jot_core::models::Board;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateBoardBody {
     pub name: String,
     pub position: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct PatchBoardBody {
     pub name: Option<String>,
     pub position: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ReorderItem {
     pub note_id: Uuid,
     pub position: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardResponse {
     pub id: String,
     pub identity_id: String,
@@ -48,6 +49,16 @@ fn to_response(b: &Board) -> BoardResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/boards",
+    tag = "boards",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of owned boards", body = Vec<BoardResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn list_boards(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -58,6 +69,17 @@ pub async fn list_boards(
     Ok(Json(boards.iter().map(to_response).collect()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/boards",
+    tag = "boards",
+    security(("bearer_auth" = [])),
+    request_body = CreateBoardBody,
+    responses(
+        (status = 201, description = "Board created", body = BoardResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn create_board(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -79,6 +101,18 @@ pub async fn create_board(
     Ok((StatusCode::CREATED, Json(to_response(&board))))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/boards/{id}",
+    tag = "boards",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Board ID")),
+    request_body = PatchBoardBody,
+    responses(
+        (status = 200, description = "Board updated"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn patch_board(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -97,6 +131,17 @@ pub async fn patch_board(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/boards/{id}",
+    tag = "boards",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Board ID")),
+    responses(
+        (status = 204, description = "Board deleted"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn delete_board(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -106,6 +151,18 @@ pub async fn delete_board(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    patch,
+    path = "/boards/{id}/reorder",
+    tag = "boards",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Board ID")),
+    request_body = Vec<ReorderItem>,
+    responses(
+        (status = 200, description = "Notes reordered"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn reorder_board(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,

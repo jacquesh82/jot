@@ -11,15 +11,17 @@ use axum::{
 use chrono::Utc;
 use jot_core::models::{Note, NoteType};
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct NotesQuery {
     pub board_id: Uuid,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateNoteBody {
+    /// "text" | "voice" | "image"
     pub note_type: String,
     pub color: Option<String>,
     pub board_id: Uuid,
@@ -28,15 +30,16 @@ pub struct CreateNoteBody {
     pub size: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct PatchNoteBody {
     pub position: Option<i32>,
     pub color: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct NoteMetadata {
     pub id: String,
+    /// "text" | "voice" | "image"
     pub note_type: String,
     pub color: String,
     pub board_id: String,
@@ -45,6 +48,7 @@ pub struct NoteMetadata {
     pub size: i64,
     pub created_at: String,
     pub updated_at: String,
+    /// Present and true when this note has been shared with at least one identity
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub shared: bool,
 }
@@ -78,6 +82,18 @@ fn parse_note_type(s: &str) -> Result<NoteType, ApiError> {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/notes",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(NotesQuery),
+    responses(
+        (status = 200, description = "List of notes for the board", body = Vec<NoteMetadata>),
+        (status = 403, description = "No access to this board"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn list_notes(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -106,6 +122,18 @@ pub async fn list_notes(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/notes",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    request_body = CreateNoteBody,
+    responses(
+        (status = 201, description = "Note created", body = serde_json::Value,
+         example = json!({"id": "550e8400-e29b-41d4-a716-446655440000"})),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn create_note(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -136,6 +164,18 @@ pub async fn create_note(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/notes/{id}",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Note ID")),
+    responses(
+        (status = 200, description = "Note metadata", body = NoteMetadata),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_note(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -145,6 +185,18 @@ pub async fn get_note(
     Ok(Json(to_metadata(&note)))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/notes/{id}",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Note ID")),
+    responses(
+        (status = 204, description = "Note deleted"),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn delete_note(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -159,6 +211,18 @@ pub async fn delete_note(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    patch,
+    path = "/notes/{id}",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Note ID")),
+    request_body = PatchNoteBody,
+    responses(
+        (status = 200, description = "Note updated"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn patch_note(
     State(state): State<AppState>,
     _auth: AuthenticatedDevice,
@@ -177,6 +241,19 @@ pub async fn patch_note(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    get,
+    path = "/notes/{id}/blob",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Note ID")),
+    responses(
+        (status = 200, description = "Raw blob content (application/octet-stream)"),
+        (status = 403, description = "No access to this board"),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_blob(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -191,6 +268,20 @@ pub async fn get_blob(
     Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data))
 }
 
+#[utoipa::path(
+    put,
+    path = "/notes/{id}/blob",
+    tag = "notes",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Note ID")),
+    request_body(content = Vec<u8>, content_type = "application/octet-stream"),
+    responses(
+        (status = 200, description = "Blob uploaded"),
+        (status = 403, description = "Board is read-only"),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn put_blob(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,

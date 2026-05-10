@@ -7,14 +7,15 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use storage::db::invites::InviteToken;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateInviteBody {
     pub label: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct InviteResponse {
     pub token: String,
     pub label: String,
@@ -31,6 +32,17 @@ fn to_response(t: InviteToken) -> InviteResponse {
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/invites",
+    tag = "invites",
+    security(("bearer_auth" = [])),
+    request_body = CreateInviteBody,
+    responses(
+        (status = 200, description = "Invite token created", body = InviteResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn create_invite(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -46,6 +58,16 @@ pub async fn create_invite(
     Ok(Json(to_response(invite)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/invites",
+    tag = "invites",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of invite tokens", body = Vec<InviteResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn list_invites(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,
@@ -58,6 +80,18 @@ pub async fn list_invites(
     Ok(Json(tokens.into_iter().map(to_response).collect()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/invites/{token}",
+    tag = "invites",
+    security(("bearer_auth" = [])),
+    params(("token" = String, Path, description = "Invite token to revoke")),
+    responses(
+        (status = 200, description = "Invite revoked"),
+        (status = 404, description = "Token not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn revoke_invite(
     State(state): State<AppState>,
     AuthenticatedDevice(claims): AuthenticatedDevice,

@@ -5,16 +5,17 @@ use axum::{extract::State, http::StatusCode, Json};
 use chrono::Utc;
 use jot_core::models::Device;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RegisterIdentityBody {
     pub uuid: String,
     pub pseudo: String,
     pub avatar: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RegisterDeviceBody {
     pub device_id: String,
     pub identity_id: String,
@@ -23,11 +24,20 @@ pub struct RegisterDeviceBody {
     pub name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RegisterDeviceResponse {
     pub token: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/register",
+    tag = "auth",
+    request_body = RegisterIdentityBody,
+    responses(
+        (status = 201, description = "Identity registered (stub)")
+    )
+)]
 pub async fn register_identity(
     Json(body): Json<RegisterIdentityBody>,
 ) -> Result<StatusCode, ApiError> {
@@ -35,6 +45,16 @@ pub async fn register_identity(
     Ok(StatusCode::CREATED)
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/device",
+    tag = "auth",
+    request_body = RegisterDeviceBody,
+    responses(
+        (status = 201, description = "Device registered, returns JWT", body = RegisterDeviceResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn register_device(
     State(state): State<AppState>,
     Json(body): Json<RegisterDeviceBody>,

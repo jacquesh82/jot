@@ -6,21 +6,23 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ShareBoardBody {
-    pub target: String, // UUID or friendly name
+    /// Target identity UUID or friendly name
+    pub target: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardShareResponse {
     pub shared_with_id: String,
     pub shared_with_name: Option<String>,
     pub created_at: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SharedBoardResponse {
     pub board_id: String,
     pub board_name: String,
@@ -28,6 +30,18 @@ pub struct SharedBoardResponse {
     pub owner_friendly_name: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/boards/{id}/shares",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Board ID")),
+    responses(
+        (status = 200, description = "List of share entries", body = Vec<BoardShareResponse>),
+        (status = 403, description = "Not the board owner"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn list_board_shares(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -50,6 +64,20 @@ pub async fn list_board_shares(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/boards/{id}/shares",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Board ID")),
+    request_body = ShareBoardBody,
+    responses(
+        (status = 200, description = "Board shared"),
+        (status = 403, description = "Not the board owner"),
+        (status = 404, description = "Target identity not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn share_board(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -61,7 +89,6 @@ pub async fn share_board(
         return Err(ApiError::Forbidden("not the board owner".into()));
     }
 
-    // Resolve target: try UUID first, then friendly name
     let target_id = if let Ok(uid) = Uuid::parse_str(&body.target) {
         uid.to_string()
     } else {
@@ -86,6 +113,22 @@ pub async fn share_board(
     ))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/boards/{id}/shares/{identity_id}",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    params(
+        ("id" = Uuid, Path, description = "Board ID"),
+        ("identity_id" = String, Path, description = "Identity to revoke access from")
+    ),
+    responses(
+        (status = 200, description = "Share revoked"),
+        (status = 403, description = "Not the board owner"),
+        (status = 404, description = "Share not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn revoke_board_share(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,
@@ -103,6 +146,16 @@ pub async fn revoke_board_share(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/boards/shared",
+    tag = "shares",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Boards shared with the current identity", body = Vec<SharedBoardResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn get_boards_shared_with_me(
     State(state): State<AppState>,
     auth: AuthenticatedDevice,

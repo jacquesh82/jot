@@ -13,14 +13,18 @@ pub mod shares;
 pub mod spa;
 pub mod ws;
 
+use crate::openapi::ApiDoc;
 use crate::state::AppState;
 use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 pub fn build(state: AppState) -> Router {
     Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/health", get(health::health))
         .route("/register", post(register::register))
         .route(

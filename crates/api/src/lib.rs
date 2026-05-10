@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod error;
+pub mod openapi;
 pub mod routes;
 pub mod state;
 
@@ -8,6 +9,7 @@ pub mod test_helpers;
 
 use axum::Router;
 pub use error::ApiError;
+pub use openapi::ApiDoc;
 pub use state::AppState;
 
 pub fn build_router(state: AppState) -> Router {
