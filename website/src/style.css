@@ -358,6 +358,14 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 4px 10px;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+a.target:hover {
+  color: var(--accent);
+  border-color: rgba(232, 201, 122, 0.35);
+  background: rgba(232, 201, 122, 0.06);
 }
 
 .platforms-note {
