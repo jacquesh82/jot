@@ -1,6 +1,7 @@
 pub mod boards;
 pub mod devices;
 pub mod identity;
+pub mod invites;
 pub mod links;
 pub mod notes;
 pub mod shares;

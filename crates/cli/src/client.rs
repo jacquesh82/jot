@@ -164,6 +164,21 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
+    pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<serde_json::Value, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}{}", self.base_url, path))
+            .header("Authorization", auth)
+            .json(body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn confirm_link(&self, token: &str) -> Result<(), CliError> {
         let auth = self.auth_header()?;
         let resp = self

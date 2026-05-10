@@ -18,6 +18,7 @@ pub struct AppState {
     pub signing_key_pem: String,
     pub verifying_key_pem: String,
     pub ws_tx: broadcast::Sender<WsEvent>,
+    pub open_registration: bool,
 }
 
 impl AppState {
@@ -34,6 +35,12 @@ impl AppState {
             signing_key_pem,
             verifying_key_pem,
             ws_tx,
+            open_registration: false,
         }
+    }
+
+    pub fn with_open_registration(mut self, enabled: bool) -> Self {
+        self.open_registration = enabled;
+        self
     }
 }

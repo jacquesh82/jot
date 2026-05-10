@@ -52,6 +52,15 @@ enum Command {
     Serve {
         #[arg(long, default_value = "3000")]
         port: u16,
+        /// Allow anyone to create an account without an invite token
+        #[arg(long)]
+        open_registration: bool,
+    },
+    /// Create an invite token (anyone with the link can register)
+    Invite {
+        /// Optional label to identify this invite
+        #[arg(long)]
+        label: Option<String>,
     },
     /// Launch the TUI
     Tui,
@@ -67,7 +76,8 @@ async fn main() -> Result<(), CliError> {
         Command::Link { token } => commands::link::run(&token).await,
         Command::Read { id } => commands::read::run(id).await,
         Command::Whoami => commands::whoami::run().await,
-        Command::Serve { port } => commands::serve::run(port).await,
+        Command::Serve { port, open_registration } => commands::serve::run(port, open_registration).await,
+        Command::Invite { label } => commands::invite::run(label).await,
         Command::Tui => tui::run_tui().await,
     }
 }

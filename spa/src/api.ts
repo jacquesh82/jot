@@ -159,6 +159,29 @@ export async function lookupIdentity(name: string): Promise<IdentityInfo | null>
   return r.json();
 }
 
+// ─── Invites ──────────────────────────────────────────────────────────────────
+
+export interface InviteToken { token: string; label: string; created_at: string; revoked_at: string | null }
+
+export async function createInvite(label: string): Promise<InviteToken> {
+  const r = await authedFetch(`${BASE}/invites`, {
+    method: "POST", body: JSON.stringify({ label }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function listInvites(): Promise<InviteToken[]> {
+  const r = await authedFetch(`${BASE}/invites`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function revokeInvite(token: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/invites/${token}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
 // ─── Shares ───────────────────────────────────────────────────────────────────
 
 export interface ShareEntry { shared_with_id: string; shared_with_name: string | null; created_at: string }

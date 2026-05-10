@@ -1,26 +1,78 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { BookOpen, RefreshCw } from "lucide-react";
+import { BookOpen, RefreshCw, Link } from "lucide-react";
 import { getLinkStatus } from "../api";
 import { QrCode } from "./QrCode";
 
 const BASE = "";
 
+type Mode = "loading" | "open" | "invite_required" | "registration_closed" | "link" | "done";
+
 export function DeviceRegister() {
+  const [mode, setMode] = useState<Mode>("loading");
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Read invite token from URL hash: #/register?invite=<token>
+  const hashInvite = (() => {
+    const h = location.hash.replace(/^#\/?register\??/, "");
+    const m = h.match(/(?:^|&)invite=([^&]+)/);
+    return m ? m[1] : null;
+  })();
+
   useEffect(() => {
-    initLink();
+    attemptRegister(hashInvite ?? undefined);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
+  async function attemptRegister(invite?: string) {
+    setInviteError(null);
+    try {
+      const body: Record<string, string> = {};
+      if (invite) body.invite_token = invite;
+
+      const r = await fetch(`${BASE}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (r.ok) {
+        const { jwt } = await r.json();
+        localStorage.setItem("token", jwt);
+        location.hash = "#/";
+        return;
+      }
+
+      const { error: reason } = await r.json().catch(() => ({ error: "unknown" }));
+
+      if (r.status === 403) {
+        if (reason === "invite_required") {
+          setMode(invite ? "invite_required" : "invite_required");
+          if (invite) setInviteError("Invite token invalide ou révoqué.");
+        } else {
+          setMode("registration_closed");
+        }
+      } else {
+        setError(`Erreur: ${reason}`);
+        setMode("invite_required");
+      }
+    } catch (e) {
+      setError(String(e));
+      setMode("invite_required");
+    }
+  }
+
   async function initLink() {
+    setError(null);
     try {
       const r = await fetch(`${BASE}/link/init`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       const { token } = await r.json();
       setLinkToken(token);
+      setMode("link");
       pollRef.current = setInterval(async () => {
         try {
           const s = await getLinkStatus(token);
@@ -39,30 +91,98 @@ export function DeviceRegister() {
   const cmd = linkToken ? `jot link ${linkToken}` : "";
 
   return (
-    <div class="register-shell" data-theme={document.documentElement.getAttribute("data-theme") ?? "light"}>
+    <div class="register-shell">
       <div class="register-card">
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
           <BookOpen size={20} />
           <strong style={{ fontSize: "1.1rem" }}>jot</strong>
         </div>
 
-        <h2>Link this device</h2>
+        {mode === "loading" && (
+          <p style={{ color: "var(--text-muted)" }}>
+            <RefreshCw size={13} style={{ display: "inline", animation: "spin 1s linear infinite" }} /> Connecting…
+          </p>
+        )}
 
-        {error ? (
-          <p style={{ color: "var(--danger)", marginTop: "0.75rem" }}>{error}</p>
-        ) : linkToken ? (
+        {(mode === "invite_required" || mode === "registration_closed") && (
           <>
-            <p style={{ marginTop: "0.75rem", marginBottom: "0.5rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              Run in your terminal:
-            </p>
-            <div class="register-cmd">{cmd}</div>
-            <QrCode text={cmd} size={160} />
-            <p class="register-hint" style={{ marginTop: "0.75rem" }}>
-              <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
-            </p>
+            <h2 style={{ marginBottom: "0.75rem" }}>Create an account</h2>
+
+            {inviteError && (
+              <p style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "0.5rem" }}>{inviteError}</p>
+            )}
+            {error && (
+              <p style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "0.5rem" }}>{error}</p>
+            )}
+
+            {mode === "invite_required" && (
+              <>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                  Enter your invite token to register:
+                </p>
+                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem" }}>
+                  <input
+                    type="text"
+                    placeholder="Invite token…"
+                    value={inviteInput}
+                    onInput={(e) => setInviteInput((e.target as HTMLInputElement).value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") attemptRegister(inviteInput.trim()); }}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    class="btn-primary"
+                    onClick={() => attemptRegister(inviteInput.trim())}
+                    disabled={!inviteInput.trim()}
+                  >
+                    Join
+                  </button>
+                </div>
+              </>
+            )}
+
+            {mode === "registration_closed" && (
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                Registration is closed on this server.
+              </p>
+            )}
+
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", marginTop: "0.25rem" }}>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                Already have an account?
+              </p>
+              <button onClick={initLink} style={{ fontSize: "0.85rem" }}>
+                <Link size={13} /> Link this device
+              </button>
+            </div>
           </>
-        ) : (
-          <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>Initialising…</p>
+        )}
+
+        {mode === "link" && (
+          <>
+            <h2 style={{ marginBottom: "0.75rem" }}>Link this device</h2>
+            {error ? (
+              <p style={{ color: "var(--danger)" }}>{error}</p>
+            ) : linkToken ? (
+              <>
+                <p style={{ marginBottom: "0.5rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  Run in your terminal:
+                </p>
+                <div class="register-cmd">{cmd}</div>
+                <QrCode text={cmd} size={160} />
+                <p class="register-hint" style={{ marginTop: "0.75rem" }}>
+                  <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
+                </p>
+                <button
+                  onClick={() => { clearInterval(pollRef.current!); setLinkToken(null); setMode("invite_required"); }}
+                  style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}
+                >
+                  ← Back
+                </button>
+              </>
+            ) : (
+              <p style={{ color: "var(--text-muted)" }}>Initialising…</p>
+            )}
+          </>
         )}
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
