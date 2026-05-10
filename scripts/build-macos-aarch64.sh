@@ -14,6 +14,9 @@ DIST="$ROOT/dist"
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "error: macOS cross-compilation is not supported — run this script on a Mac" >&2; exit 1
 fi
+
+export PATH="$HOME/.cargo/bin:$PATH"
+
 if ! command -v cargo &>/dev/null; then
   echo "error: cargo not found — install Rust from https://rustup.rs" >&2; exit 1
 fi

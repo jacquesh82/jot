@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build jot for Windows x86_64 (static, cross-compiled via zigbuild)
 # Can run on Linux or macOS.
-# Requires: cargo-zigbuild, zig (pip install ziglang), rustup target
 set -euo pipefail
 
 TARGET="x86_64-pc-windows-gnu"
@@ -9,17 +8,10 @@ BIN_NAME="jot-windows-x86_64.exe"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 
-# ── Prerequisites ─────────────────────────────────────────────────────────────
+# ── Prerequisites (auto-install cargo-zigbuild + zig) ─────────────────────────
 
-if ! command -v cargo &>/dev/null; then
-  echo "error: cargo not found — install Rust from https://rustup.rs" >&2; exit 1
-fi
-if ! command -v cargo-zigbuild &>/dev/null; then
-  echo "error: cargo-zigbuild not found — run: cargo install cargo-zigbuild" >&2; exit 1
-fi
-if ! python3 -c "import ziglang" &>/dev/null && ! command -v zig &>/dev/null; then
-  echo "error: zig not found — run: pip install ziglang  or  brew install zig" >&2; exit 1
-fi
+# shellcheck source=_common.sh
+source "$ROOT/scripts/_common.sh"
 
 # ── Rust target ───────────────────────────────────────────────────────────────
 
