@@ -105,7 +105,9 @@ pub async fn create_note(
         updated_at: now,
     };
     state.db.insert_note(&note).await?;
-    let _ = state.ws_tx.send(WsEvent::NoteUpdated { id: note.id.to_string() });
+    let _ = state.ws_tx.send(WsEvent::NoteUpdated {
+        id: note.id.to_string(),
+    });
     Ok(StatusCode::CREATED)
 }
 
@@ -126,7 +128,9 @@ pub async fn delete_note(
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
     state.blobs.delete(&note.blob_key).await.ok();
     state.db.delete_note(id).await?;
-    let _ = state.ws_tx.send(WsEvent::NoteDeleted { id: id.to_string() });
+    let _ = state
+        .ws_tx
+        .send(WsEvent::NoteDeleted { id: id.to_string() });
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -142,7 +146,9 @@ pub async fn patch_note(
     if let Some(color) = body.color {
         state.db.update_note_color(id, &color).await?;
     }
-    let _ = state.ws_tx.send(WsEvent::NoteUpdated { id: id.to_string() });
+    let _ = state
+        .ws_tx
+        .send(WsEvent::NoteUpdated { id: id.to_string() });
     Ok(StatusCode::OK)
 }
 

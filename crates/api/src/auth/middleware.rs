@@ -1,11 +1,8 @@
 use crate::auth::{verify_token, DeviceClaims};
-use crate::ApiError;
 use crate::state::AppState;
+use crate::ApiError;
 use async_trait::async_trait;
-use axum::{
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 
 pub struct AuthenticatedDevice(pub DeviceClaims);
 
