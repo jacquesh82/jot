@@ -164,6 +164,21 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
+    pub async fn confirm_link(&self, token: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/link/confirm", self.base_url))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "token": token }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub async fn delete_note(&self, note_id: Uuid) -> Result<(), CliError> {
         let auth = self.auth_header()?;

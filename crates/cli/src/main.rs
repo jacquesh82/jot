@@ -36,6 +36,11 @@ enum Command {
         #[arg(long, help = "List registered devices")]
         devices: bool,
     },
+    /// Approve a pending device link request (from the web UI)
+    Link {
+        /// Link token shown in the browser
+        token: String,
+    },
     /// Read the content of a note
     Read {
         /// Note ID
@@ -59,6 +64,7 @@ async fn main() -> Result<(), CliError> {
         Command::Add { text, board } => commands::add::run(text, board).await,
         Command::New { what } => commands::new::run(what).await,
         Command::List { board, boards, devices } => commands::list::run(board, boards, devices).await,
+        Command::Link { token } => commands::link::run(&token).await,
         Command::Read { id } => commands::read::run(id).await,
         Command::Whoami => commands::whoami::run().await,
         Command::Serve { port } => commands::serve::run(port).await,
