@@ -2,8 +2,20 @@ use crate::client::JotClient;
 use crate::error::CliError;
 use uuid::Uuid;
 
-pub async fn run(board: Option<Uuid>, boards: bool) -> Result<(), CliError> {
+pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(), CliError> {
     let client = JotClient::from_config();
+
+    if devices {
+        let ds = client.get_devices().await?;
+        if ds.is_empty() {
+            println!("(no devices)");
+        } else {
+            for d in &ds {
+                println!("{}\t{}\tlast_seen:{}", d.id, d.name, d.last_seen);
+            }
+        }
+        return Ok(());
+    }
 
     if boards {
         let bs = client.get_boards().await?;
