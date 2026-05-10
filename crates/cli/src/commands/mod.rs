@@ -2,6 +2,7 @@ pub mod add;
 pub mod invite;
 pub mod link;
 pub mod list;
+pub mod migrate;
 pub mod new;
 pub mod read;
 pub mod serve;

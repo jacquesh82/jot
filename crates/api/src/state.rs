@@ -19,6 +19,7 @@ pub struct AppState {
     pub verifying_key_pem: String,
     pub ws_tx: broadcast::Sender<WsEvent>,
     pub open_registration: bool,
+    pub schema_version: i64,
 }
 
 impl AppState {
@@ -36,11 +37,17 @@ impl AppState {
             verifying_key_pem,
             ws_tx,
             open_registration: false,
+            schema_version: 0,
         }
     }
 
     pub fn with_open_registration(mut self, enabled: bool) -> Self {
         self.open_registration = enabled;
+        self
+    }
+
+    pub fn with_schema_version(mut self, version: i64) -> Self {
+        self.schema_version = version;
         self
     }
 }

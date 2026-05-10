@@ -30,6 +30,31 @@ impl Db {
         sqlx::migrate!("./migrations").run(&self.0).await?;
         Ok(())
     }
+
+    /// Returns the version number of the highest successfully applied migration,
+    /// or 0 if no migrations have been run yet.
+    pub async fn schema_version(&self) -> Result<i64, StorageError> {
+        // _sqlx_migrations is created by sqlx::migrate! on first run.
+        // It may not exist if the DB was never migrated.
+        let exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='_sqlx_migrations'",
+        )
+        .fetch_one(&self.0)
+        .await
+        .unwrap_or(false);
+
+        if !exists {
+            return Ok(0);
+        }
+
+        let version: Option<i64> =
+            sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = TRUE")
+                .fetch_optional(&self.0)
+                .await?
+                .flatten();
+
+        Ok(version.unwrap_or(0))
+    }
 }
 
 #[cfg(test)]
