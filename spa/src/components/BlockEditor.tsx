@@ -28,6 +28,16 @@ export function BlockEditor({ noteId, boardId }: Props) {
 
   useEffect(() => { refresh(); }, [noteId]);
 
+  useEffect(() => {
+    const off = api.connectWs((evt) => {
+      const e = evt?.event;
+      if (typeof e !== "string" || !e.startsWith("block_")) return;
+      if ((evt as any).note_id !== noteId) return;
+      refresh();
+    });
+    return () => off();
+  }, [noteId]);
+
   const ctx = (): keymap.KeymapCtx => ({
     noteId, boardId,
     blocks: flat,

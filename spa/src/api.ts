@@ -559,3 +559,10 @@ export async function blocksWithTag(name: string): Promise<string[]> {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
+
+export async function setNoteSchemaVersion(noteId: string, schema_version: number): Promise<void> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/schema-version`, {
+    method: "PATCH", body: JSON.stringify({ schema_version }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}

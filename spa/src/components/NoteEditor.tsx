@@ -15,11 +15,12 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
   fetchNoteContent, fetchNoteMeta, updateNoteContent, deleteNote, encryptExistingNote,
-  fetchShares, shareNote, revokeShare,
+  fetchShares, shareNote, revokeShare, setNoteSchemaVersion,
   type ShareEntry,
 } from "../api";
 import { selectedNoteId } from "../selectedNote";
 import { BlockEditor } from "./BlockEditor";
+import { migrateNoteToBlocks } from "../blocks/migrate";
 
 interface Props {
   onDeleted: (id: string) => void;
@@ -53,6 +54,7 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
   });
   const [resizing, setResizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const migratedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!noteId) return;
@@ -71,14 +73,33 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
 
   async function load(id: string) {
     try {
-      const meta = await fetchNoteMeta(id);
+      let meta = await fetchNoteMeta(id);
       setBoardId(meta.board_id);
-      setSchemaVersion(meta.schema_version ?? 0);
       setNoteType(meta.note_type);
       const { content: text, encrypted } = await fetchNoteContent(id);
       setContent(text);
       setDraft(text);
       setIsEncrypted(encrypted);
+
+      // Auto-migrate legacy text notes (schema_version=0) to block structure (v1).
+      // Skip if already migrated this session to avoid re-running on re-render.
+      const sv = meta.schema_version ?? 0;
+      if (meta.note_type === "text" && sv === 0 && !migratedRef.current.has(id)) {
+        migratedRef.current.add(id);
+        try {
+          if (text.trim()) {
+            await migrateNoteToBlocks(meta.board_id, id, text);
+          } else {
+            await setNoteSchemaVersion(id, 1);
+          }
+          meta = await fetchNoteMeta(id);
+        } catch (e) {
+          console.error("Block migration failed", e);
+          setSchemaVersion(sv);
+          return;
+        }
+      }
+      setSchemaVersion(meta.schema_version ?? 0);
     } catch (e) {
       setLoadError(String(e));
     }
