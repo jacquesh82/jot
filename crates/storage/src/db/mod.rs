@@ -9,6 +9,7 @@ pub mod invites;
 pub mod links;
 pub mod notes;
 pub mod shares;
+pub mod tags;
 
 use crate::StorageError;
 use sqlx::{
