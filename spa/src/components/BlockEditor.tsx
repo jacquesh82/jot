@@ -5,6 +5,7 @@ import { buildTree, flatten, type BlockNode } from "../blocks/tree";
 import { decryptBlock } from "../blocks/crypto";
 import * as keymap from "../blocks/keymap";
 import { t } from "../i18n";
+import { SlashMenu } from "./SlashMenu";
 import "./BlockEditor.css";
 
 interface Props { noteId: string; boardId: string; }
@@ -13,6 +14,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [roots, setRoots] = useState<BlockNode[]>([]);
   const [flat, setFlat] = useState<BlockNode[]>([]);
   const [active, setActive] = useState<string | null>(null);
+  const [slashFor, setSlashFor] = useState<string | null>(null);
 
   const refresh = async () => {
     const dtos = await api.listBlocks(noteId);
@@ -46,6 +48,14 @@ export function BlockEditor({ noteId, boardId }: Props) {
   });
 
   const onKeyDown = async (e: KeyboardEvent) => {
+    if (e.key === "/" && (e.target as HTMLElement).innerText.trim() === "") {
+      e.preventDefault();
+      const row = (e.target as HTMLElement).closest(".block-row");
+      const bullet = row?.querySelector(".block-bullet") as HTMLElement | null;
+      const id = bullet?.getAttribute("data-id");
+      if (id) setSlashFor(id);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await keymap.newBlockBelow(ctx()); }
     else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); await keymap.indent(ctx()); }
     else if (e.key === "Tab" &&  e.shiftKey) { e.preventDefault(); await keymap.outdent(ctx()); }
@@ -85,6 +95,17 @@ export function BlockEditor({ noteId, boardId }: Props) {
   return (
     <div class="block-editor">
       {roots.length === 0 ? <p class="block-empty">{t("block.empty")}</p> : roots.map(r => renderNode(r))}
+      {slashFor && (
+        <SlashMenu
+          onClose={() => setSlashFor(null)}
+          onPick={async (id) => {
+            try { await api.patchBlock(slashFor!, { block_type: id }); }
+            catch (e) { console.warn("patch type failed", e); }
+            setSlashFor(null);
+            await refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

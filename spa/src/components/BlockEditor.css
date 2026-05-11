@@ -5,3 +5,30 @@
 .block-bullet { color: var(--muted, #888); cursor: grab; user-select: none; padding-top: 4px; }
 .block-content { flex: 1; outline: none; padding: 2px 4px; border-radius: 4px; min-height: 1.4em; white-space: pre-wrap; }
 .block-content:focus { background: rgba(255,255,255,0.06); }
+
+.slash-menu {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--surface, #1a1a1a);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 4px;
+  display: flex; flex-direction: column;
+  min-width: 180px;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.slash-menu button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+.slash-menu button.active,
+.slash-menu button:hover {
+  background: rgba(255,255,255,0.08);
+}
