@@ -5,6 +5,12 @@ use aes_gcm::{
 };
 use rand::{rngs::OsRng, RngCore};
 
+pub fn generate_dek() -> [u8; 32] {
+    let mut dek = [0u8; 32];
+    OsRng.fill_bytes(&mut dek);
+    dek
+}
+
 pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, CoreError> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
 

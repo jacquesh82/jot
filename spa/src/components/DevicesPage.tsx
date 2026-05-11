@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Monitor, Pencil, Trash2, X, Check } from "lucide-react";
 import { fetchDevices, renameDevice, deleteDevice, decodeJwt, type DeviceSummary } from "../api";
+import { t } from "../i18n";
 
 export function DevicesPage() {
   const [devices, setDevices] = useState<DeviceSummary[]>([]);
@@ -27,7 +28,7 @@ export function DevicesPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete device "${name}"?`)) return;
+    if (!confirm(t("devices.deleteConfirm", { name }))) return;
     try { await deleteDevice(id); await load(); }
     catch (e) { setError(String(e)); }
   }
@@ -38,7 +39,7 @@ export function DevicesPage() {
 
   return (
     <div>
-      <div class="page-title"><h2>Devices</h2></div>
+      <div class="page-title"><h2>{t("devices.title")}</h2></div>
 
       {error && (
         <div class="error-msg">
@@ -48,7 +49,7 @@ export function DevicesPage() {
       )}
 
       {devices.length === 0 ? (
-        <p class="empty-msg">No devices found.</p>
+        <p class="empty-msg">{t("devices.noDevices")}</p>
       ) : (
         <ul class="item-list">
           {devices.map((d) => {
@@ -67,16 +68,16 @@ export function DevicesPage() {
                     <div style={{ flex: 1, overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         <span class="item-name">{d.name}</span>
-                        {isCurrent && <span class="device-badge current">current</span>}
+                        {isCurrent && <span class="device-badge current">{t("devices.current")}</span>}
                       </div>
-                      <div class="device-meta">{d.id.slice(0, 8)} · last seen {fmtDate(d.last_seen)}</div>
+                      <div class="device-meta">{d.id.slice(0, 8)} · {t("devices.lastSeen", { date: fmtDate(d.last_seen) })}</div>
                     </div>
                   )}
 
                   <div class="item-actions">
-                    <button class="btn-icon" title="Rename" onClick={() => startRename(d)}><Pencil size={13} /></button>
+                    <button class="btn-icon" title={t("devices.rename")} onClick={() => startRename(d)}><Pencil size={13} /></button>
                     {!isCurrent && (
-                      <button class="btn-icon btn-danger" title="Delete" onClick={() => handleDelete(d.id, d.name)}>
+                      <button class="btn-icon btn-danger" title={t("devices.delete")} onClick={() => handleDelete(d.id, d.name)}>
                         <Trash2 size={13} />
                       </button>
                     )}

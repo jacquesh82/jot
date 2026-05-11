@@ -1,7 +1,24 @@
 use crate::config::Config;
 use crate::error::CliError;
+use crate::identity;
+use jot_core::crypto::{decrypt, derive_bek, derive_dek, encrypt};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShareEntry {
+    pub shared_with_id: String,
+    pub shared_with_name: Option<String>,
+    pub permission: Option<String>,
+    pub public_key_x25519: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityInfo {
+    pub id: String,
+    pub friendly_name: String,
+    pub public_key_x25519: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardSummary {
@@ -24,6 +41,33 @@ pub struct NoteSummary {
     pub blob_key: String,
     pub color: String,
     pub position: i32,
+    pub snippet: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteDetail {
+    pub id: Uuid,
+    pub board_id: Uuid,
+    pub note_type: String,
+    pub blob_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SharedBoardSummary {
+    pub board_id: Uuid,
+    pub board_name: String,
+    pub owner_identity_id: String,
+    pub owner_friendly_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SharedNoteSummary {
+    pub note_id: Uuid,
+    pub note_type: String,
+    pub board_id: Uuid,
+    pub owner_identity_id: String,
+    pub owner_friendly_name: Option<String>,
+    pub snippet: Option<String>,
 }
 
 #[derive(Clone)]
@@ -97,14 +141,22 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
+    /// Create and upload an E2E-encrypted note.
+    /// DEK is derived deterministically: BEK = HKDF(privkey, board_id), DEK = HKDF(BEK, note_id).
     pub async fn create_note(&self, board_id: Uuid, content: &str) -> Result<Uuid, CliError> {
         let auth = self.auth_header()?;
+        let (secret, public) = identity::load_or_generate()?;
+
+        // Register our public key (idempotent — needed for board sharing).
+        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+
+        // Create note record first to obtain the note_id (needed for DEK derivation).
         let blob_key = Uuid::new_v4().to_string();
         let body = serde_json::json!({
             "note_type": "text",
             "board_id": board_id,
             "blob_key": blob_key,
-            "size": content.len() as i64,
+            "size": 0,
         });
         let resp = self
             .inner
@@ -122,20 +174,96 @@ impl JotClient {
             .and_then(|s| Uuid::parse_str(s).ok())
             .ok_or_else(|| CliError::Server("missing note id in response".into()))?;
 
-        // Upload blob
+        // Derive DEK from identity key + board_id + note_id.
+        let dek = self.derive_dek_for(&secret, board_id, note_id)?;
+        let ciphertext = encrypt(&dek, content.as_bytes())
+            .map_err(|e| CliError::Server(format!("encryption failed: {e}")))?;
+
+        // Upload encrypted blob and update size.
+        let size = ciphertext.len() as i64;
         let blob_resp = self
             .inner
             .put(format!("{}/notes/{}/blob", self.base_url, note_id))
-            .header("Authorization", auth)
-            .body(content.as_bytes().to_vec())
+            .header("Authorization", auth.clone())
+            .body(ciphertext)
             .send()
             .await?;
         if !blob_resp.status().is_success() {
             return Err(CliError::Server(blob_resp.status().to_string()));
         }
+        // Patch the note size now that we know it.
+        let _ = self
+            .inner
+            .patch(format!("{}/notes/{}", self.base_url, note_id))
+            .header("Authorization", auth.clone())
+            .json(&serde_json::json!({ "size": size }))
+            .send()
+            .await;
+
         Ok(note_id)
     }
 
+    /// Fetch note metadata (needed for board_id to derive the DEK).
+    pub async fn get_note_meta(&self, note_id: Uuid) -> Result<NoteDetail, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/{}", self.base_url, note_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(format!("note {} not found", note_id)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Fetch encrypted blob and decrypt it using the derived DEK.
+    pub async fn get_note_text(&self, note_id: Uuid) -> Result<String, CliError> {
+        let auth = self.auth_header()?;
+
+        // Need board_id to derive the DEK.
+        let meta = self.get_note_meta(note_id).await?;
+
+        let resp = self
+            .inner
+            .get(format!("{}/notes/{}/blob", self.base_url, note_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        let ciphertext = resp.bytes().await?.to_vec();
+
+        let dek = self.derive_dek_local(note_id, meta.board_id).await?;
+        let plaintext = decrypt(&dek, &ciphertext)
+            .map_err(|_| CliError::Server("decryption failed".into()))?;
+        String::from_utf8(plaintext)
+            .map_err(|_| CliError::Server("note content is not valid UTF-8".into()))
+    }
+
+    /// Derive DEK for this identity (owner path): BEK = HKDF(privkey, board_id), DEK = HKDF(BEK, note_id).
+    async fn derive_dek_local(&self, note_id: Uuid, board_id: Uuid) -> Result<[u8; 32], CliError> {
+        let (secret, _) = identity::load_or_generate()?;
+        self.derive_dek_for(&secret, board_id, note_id)
+    }
+
+    fn derive_dek_for(
+        &self,
+        secret: &x25519_dalek::StaticSecret,
+        board_id: Uuid,
+        note_id: Uuid,
+    ) -> Result<[u8; 32], CliError> {
+        let privkey = secret.to_bytes();
+        let bek = derive_bek(&privkey, board_id.as_bytes())
+            .map_err(|e| CliError::Server(format!("BEK derivation failed: {e}")))?;
+        derive_dek(&bek, note_id.as_bytes())
+            .map_err(|e| CliError::Server(format!("DEK derivation failed: {e}")))
+    }
+
+    /// Fetch raw encrypted blob bytes (for binary content like images/audio).
+    #[allow(dead_code)]
     pub async fn get_blob(&self, note_id: Uuid) -> Result<Vec<u8>, CliError> {
         let auth = self.auth_header()?;
         let resp = self
@@ -150,6 +278,184 @@ impl JotClient {
         Ok(resp.bytes().await?.to_vec())
     }
 
+    pub async fn register_pubkey(&self, pubkey_hex: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .put(format!("{}/identity/me/pubkey", self.base_url))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "public_key_x25519": pubkey_hex }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+
+    /// Look up an identity by friendly name or UUID.
+    pub async fn lookup_identity(&self, name_or_id: &str) -> Result<Option<IdentityInfo>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/identity/lookup/{}", self.base_url, name_or_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if resp.status().as_u16() == 404 { return Ok(None); }
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(Some(resp.json().await?))
+    }
+
+    pub async fn list_note_shares(&self, note_id: Uuid) -> Result<Vec<ShareEntry>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/{}/shares", self.base_url, note_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Share a note with a recipient. Derives the DEK locally and re-encrypts for them.
+    pub async fn share_note(&self, note_id: Uuid, target: &str, permission: &str) -> Result<(), CliError> {
+        let target_info = self.lookup_identity(target).await?
+            .ok_or_else(|| CliError::Server(format!("identity \"{target}\" not found")))?;
+        let pubkey_hex = target_info.public_key_x25519
+            .ok_or_else(|| CliError::Server(format!("\"{target}\" has no public key registered — they must create a note first")))?;
+
+        let (secret, public) = identity::load_or_generate()?;
+
+        // Register our public key so the recipient can derive the ECDH wrap key.
+        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+
+        // Derive DEK locally (no server round-trip needed for owner).
+        let meta = self.get_note_meta(note_id).await?;
+        let raw_dek = self.derive_dek_for(&secret, meta.board_id, note_id)?;
+
+        let recipient_wrap = identity::cross_wrap_key(&secret, &pubkey_hex)?;
+        let encrypted_for_recipient = encrypt(&recipient_wrap, &raw_dek)
+            .map_err(|e| CliError::Server(format!("DEK re-encryption failed: {e}")))?;
+
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/notes/{}/shares", self.base_url, note_id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({
+                "target": target,
+                "encrypted_dek_for_recipient": hex::encode(&encrypted_for_recipient),
+                "permission": permission,
+            }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    /// Revoke a note share: removes the recipient's DEK entry from note_shares.
+    /// With deterministic BEK→DEK derivation the owner's DEK never changes.
+    pub async fn revoke_share(&self, note_id: Uuid, target_id: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self.inner
+            .delete(format!("{}/notes/{}/shares/{}", self.base_url, note_id, target_id))
+            .header("Authorization", auth)
+            .send().await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+    /// Store the BEK encrypted for a board member.
+    pub async fn put_board_key(
+        &self,
+        board_id: Uuid,
+        identity_id: &str,
+        encrypted_bek_hex: &str,
+    ) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .put(format!("{}/boards/{}/keys/{}", self.base_url, board_id, identity_id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "encrypted_bek": encrypted_bek_hex }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    /// Delete a member's BEK (revoke board access).
+    pub async fn delete_board_key(&self, board_id: Uuid, identity_id: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/boards/{}/keys/{}", self.base_url, board_id, identity_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn share_board(&self, board_id: Uuid, target: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/boards/{}/shares", self.base_url, board_id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "target": target }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn revoke_board_share(&self, board_id: Uuid, identity_id: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/boards/{}/shares/{}", self.base_url, board_id, identity_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+
+    pub async fn get_identity_me(&self) -> Result<IdentityInfo, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/identity/me", self.base_url))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn get_devices(&self) -> Result<Vec<DeviceSummary>, CliError> {
         let auth = self.auth_header()?;
         let resp = self
@@ -162,6 +468,35 @@ impl JotClient {
             return Err(CliError::Server(resp.status().to_string()));
         }
         Ok(resp.json().await?)
+    }
+
+    pub async fn delete_device(&self, id: Uuid) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/devices/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+    pub async fn rename_device(&self, id: Uuid, name: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/devices/{}/rename", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "name": name }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
     }
 
     pub async fn post_json(
@@ -183,13 +518,112 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
-    pub async fn confirm_link(&self, token: &str) -> Result<(), CliError> {
+    pub async fn link_status(&self, token: &str) -> Result<(String, Option<String>), CliError> {
+        let resp = self
+            .inner
+            .get(format!("{}/link/status/{}", self.base_url, token))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        let v: serde_json::Value = resp.json().await?;
+        let status = v["status"].as_str().unwrap_or("").to_string();
+        let jwt = v["jwt"].as_str().map(str::to_owned);
+        Ok((status, jwt))
+    }
+
+    pub async fn rename_board(&self, id: Uuid, name: &str) -> Result<(), CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner
-            .post(format!("{}/link/confirm", self.base_url))
+            .patch(format!("{}/boards/{}", self.base_url, id))
             .header("Authorization", auth)
-            .json(&serde_json::json!({ "token": token }))
+            .json(&serde_json::json!({ "name": name }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+    pub async fn delete_board(&self, id: Uuid) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/boards/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+    pub async fn update_note(&self, note_id: Uuid, content: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let meta = self.get_note_meta(note_id).await?;
+        let (secret, _) = identity::load_or_generate()?;
+        let dek = self.derive_dek_for(&secret, meta.board_id, note_id)?;
+        let ciphertext = encrypt(&dek, content.as_bytes())
+            .map_err(|e| CliError::Server(format!("encryption failed: {e}")))?;
+        let blob_resp = self
+            .inner
+            .put(format!("{}/notes/{}/blob", self.base_url, note_id))
+            .header("Authorization", auth.clone())
+            .body(ciphertext)
+            .send()
+            .await?;
+        if !blob_resp.status().is_success() {
+            return Err(CliError::Server(blob_resp.status().to_string()));
+        }
+        let snippet: String = content.chars().take(80).collect();
+        let _ = self
+            .inner
+            .patch(format!("{}/notes/{}", self.base_url, note_id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "snippet": snippet }))
+            .send()
+            .await;
+        Ok(())
+    }
+
+    pub async fn get_shared_boards(&self) -> Result<Vec<SharedBoardSummary>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/boards/shared", self.base_url))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn get_shared_notes(&self) -> Result<Vec<SharedNoteSummary>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/shared", self.base_url))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn delete_account(&self) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/identity/me", self.base_url))
+            .header("Authorization", auth)
             .send()
             .await?;
         if !resp.status().is_success() {

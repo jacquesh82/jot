@@ -1,4 +1,5 @@
 use crate::error::CliError;
+use crate::t;
 use storage::Db;
 
 pub async fn run() -> Result<(), CliError> {
@@ -8,8 +9,8 @@ pub async fn run() -> Result<(), CliError> {
 
     let db_path = data_dir.join("jot.db");
     if !db_path.exists() {
-        println!("No database found at {}.", db_path.display());
-        println!("Run `jot serve` first to create the database.");
+        println!("{}", t!("cmd.migrate.noDb", "path" => db_path.display()));
+        println!("{}", t!("cmd.migrate.runServe"));
         return Ok(());
     }
 
@@ -24,9 +25,9 @@ pub async fn run() -> Result<(), CliError> {
         .map_err(|e| CliError::Server(e.to_string()))?;
 
     if after > before {
-        println!("Database schema migrated: v{} → v{}", before, after);
+        println!("{}", t!("cmd.migrate.migrated", "from" => before, "to" => after));
     } else {
-        println!("Database schema already up to date (v{}).", after);
+        println!("{}", t!("cmd.migrate.upToDate", "v" => after));
     }
 
     Ok(())

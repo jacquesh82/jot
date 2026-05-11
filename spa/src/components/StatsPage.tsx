@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { BarChart2, Folder, FileText, Monitor, RefreshCw } from "lucide-react";
 import { fetchBoards, fetchNotes, fetchDevices, type Board } from "../api";
+import { t } from "../i18n";
 
 interface BoardStat { board: Board; count: number }
 
@@ -42,9 +43,9 @@ export function StatsPage() {
   return (
     <div>
       <div class="page-title">
-        <h2>Stats</h2>
+        <h2>{t("stats.title")}</h2>
         <div class="page-title-actions">
-          <button class="btn-icon" onClick={load} disabled={loading} title="Refresh">
+          <button class="btn-icon" onClick={load} disabled={loading} title={t("stats.refresh")}>
             <RefreshCw size={14} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
           </button>
         </div>
@@ -53,37 +54,37 @@ export function StatsPage() {
       {error && <div class="error-msg">{error}</div>}
 
       {loading ? (
-        <p class="empty-msg">Loading…</p>
+        <p class="empty-msg">{t("stats.loading")}</p>
       ) : (
         <>
           <div class="stats-grid">
             <div class="stat-card">
               <Folder size={18} style={{ color: "var(--accent)" }} />
               <div class="stat-value">{boardStats.length}</div>
-              <div class="stat-label">Boards</div>
+              <div class="stat-label">{t("stats.boards")}</div>
             </div>
             <div class="stat-card">
               <FileText size={18} style={{ color: "var(--accent)" }} />
               <div class="stat-value">{totalNotes}</div>
-              <div class="stat-label">Notes</div>
+              <div class="stat-label">{t("stats.notes")}</div>
             </div>
             <div class="stat-card">
               <Monitor size={18} style={{ color: "var(--accent)" }} />
               <div class="stat-value">{deviceCount}</div>
-              <div class="stat-label">Devices</div>
+              <div class="stat-label">{t("stats.devices")}</div>
             </div>
             {boardStats.length > 0 && (
               <div class="stat-card">
                 <BarChart2 size={18} style={{ color: "var(--accent)" }} />
                 <div class="stat-value">{Math.round(totalNotes / boardStats.length * 10) / 10}</div>
-                <div class="stat-label">Avg / board</div>
+                <div class="stat-label">{t("stats.avgPerBoard")}</div>
               </div>
             )}
           </div>
 
           {boardStats.length > 0 && (
             <>
-              <h3 style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: 600 }}>Notes per board</h3>
+              <h3 style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: 600 }}>{t("stats.notesPerBoard")}</h3>
               <div class="bar-chart">
                 {boardStats
                   .slice()

@@ -13,8 +13,8 @@ feel like a Unix tool: simple, composable, pipeable.
 - Multi-user: open registration or invite-token gating
 - Board and note sharing with per-identity access control
 
-> **Note:** End-to-end encryption is designed (see `docs/sharing-crypto-design.md`)
-> but not yet implemented. Note content is currently stored in plaintext on the server.
+All note content is **end-to-end encrypted** — the server stores only ciphertext and
+never has access to plaintext or key material.
 
 ## Quick start
 
@@ -123,6 +123,69 @@ graph TB
     STORAGE -->|JOT_STORAGE=s3| S3SVC
 ```
 
+## End-to-end encryption
+
+jot uses a **per-note Data Encryption Key (DEK)** model.  The private key never
+leaves the device — the server only stores ciphertext and wrapped keys.
+
+### Primitives
+
+| Role | Algorithm | Size |
+|---|---|---|
+| Identity key pair | X25519 (ECDH) | 32 bytes |
+| Key derivation | HKDF-SHA-256, info `"jot-share-v1"` | → 32-byte wrap key |
+| Note encryption | AES-256-GCM, random 12-byte nonce | 256-bit key |
+| Blob format | `[nonce 12 B]` \|\| `[ciphertext + GCM tag 16 B]` | — |
+
+### Key lifecycle
+
+The X25519 identity key pair is generated once on first `jot serve` and stored at
+`~/.config/jot/identity.key` (chmod 600). The public key is registered in the
+database. The SPA fetches the private key over the authenticated local API
+(`GET /identity/me/privkey`) so both CLI and browser share the same pair.
+
+### Write flow
+
+```mermaid
+flowchart LR
+    subgraph CLIENT["Client  (CLI or SPA)"]
+        direction TB
+        PT["plaintext"] --> AES1
+        DEK["DEK\n32 random bytes"] --> AES1["AES-256-GCM\nnonce ‖ ciphertext"]
+        DEK --> AES2["AES-256-GCM\nnonce ‖ encrypted_DEK"]
+        PRIV["identity.key\n(private)"] --> ECDH["X25519\nself-ECDH"]
+        PUB["public key"] --> ECDH
+        ECDH --> HKDF["HKDF-SHA-256\njot-share-v1"]
+        HKDF --> WK["wrap_key"]
+        WK --> AES2
+    end
+    AES1 -->|"PUT /notes/:id/blob"| BLOB[("blobs/\nciphertext")]
+    AES2 -->|"PUT /notes/:id/dek"| DB[("jot.db\nencrypted_DEK")]
+```
+
+### Read flow
+
+```mermaid
+flowchart LR
+    BLOB[("blobs/\nciphertext")] -->|"GET /notes/:id/blob"| AES1
+    DB[("jot.db\nencrypted_DEK")] -->|"GET /notes/:id/dek"| AES2
+
+    subgraph CLIENT["Client  (CLI or SPA)"]
+        direction TB
+        PRIV["identity.key\n(private)"] --> ECDH["X25519\nself-ECDH"]
+        PUB["public key"] --> ECDH
+        ECDH --> HKDF["HKDF-SHA-256\njot-share-v1"]
+        HKDF --> WK["wrap_key"]
+        WK --> AES2["AES-256-GCM\ndecrypt → DEK"]
+        AES2 --> DEK["DEK"]
+        DEK --> AES1["AES-256-GCM\ndecrypt → plaintext"]
+        AES1 --> PT["plaintext"]
+    end
+```
+
+> The server sees only `ciphertext` and `encrypted_DEK`.  It cannot recover the
+> plaintext without the private key stored exclusively on the user's device.
+
 ## Web SPA
 
 The SPA is served directly by `jot serve` on the same port as the API.
@@ -159,7 +222,7 @@ jot uses `sqlx` migrations. The current schema version is displayed at startup
 and available at `GET /health`:
 
 ```
-Database schema: up to date (v4)
+Database schema: up to date (v5)
 # or, after an update:
 Database schema migrated: v3 → v4
 ```

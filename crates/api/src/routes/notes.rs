@@ -1,6 +1,7 @@
 use crate::auth::middleware::AuthenticatedDevice;
 use crate::state::{AppState, WsEvent};
 use crate::ApiError;
+use storage::db::shares::permission_allows;
 use axum::{
     body::Bytes,
     extract::{Path, Query, State},
@@ -28,12 +29,15 @@ pub struct CreateNoteBody {
     pub position: Option<i32>,
     pub blob_key: String,
     pub size: i64,
+    /// Plaintext first-line preview (client-side excerpt, max ~80 chars)
+    pub snippet: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct PatchNoteBody {
     pub position: Option<i32>,
     pub color: Option<String>,
+    pub snippet: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -51,9 +55,19 @@ pub struct NoteMetadata {
     /// Present and true when this note has been shared with at least one identity
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub shared: bool,
+    /// Plaintext first-line preview stored by the client at write time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
+    /// True when the note blob is E2E encrypted (a DEK exists for the caller)
+    pub encrypted: bool,
 }
 
 fn to_metadata(note: &Note) -> NoteMetadata {
+    let snippet = if note.content.is_empty() {
+        None
+    } else {
+        String::from_utf8(note.content.clone()).ok()
+    };
     NoteMetadata {
         id: note.id.to_string(),
         note_type: match note.note_type {
@@ -70,6 +84,8 @@ fn to_metadata(note: &Note) -> NoteMetadata {
         created_at: note.created_at.to_rfc3339(),
         updated_at: note.updated_at.to_rfc3339(),
         shared: false,
+        snippet,
+        encrypted: false,
     }
 }
 
@@ -104,18 +120,39 @@ pub async fn list_notes(
         return Err(ApiError::Forbidden("no access to this board".into()));
     }
     let notes = state.db.list_notes(q.board_id).await?;
-    let shared_ids: std::collections::HashSet<String> = state
-        .db
-        .list_shared_note_ids_for_board(&bid, &auth.0.identity_id)
-        .await?
-        .into_iter()
-        .collect();
+
+    // Determine encryption status for the caller:
+    // - owner: always encrypted (DEK derived locally, never stored)
+    // - board member: encrypted when a BEK exists in board_keys
+    // - individual share recipient: encrypted when a DEK exists in note_shares
+    let is_owner = state.db.owns_board(&bid, &auth.0.identity_id).await?;
+    let (shared_ids, all_encrypted) = if is_owner {
+        let shared = state.db.list_shared_note_ids_for_board(&bid, &auth.0.identity_id).await?;
+        (shared, true)
+    } else {
+        let (shared, has_bek) = tokio::try_join!(
+            state.db.list_shared_note_ids_for_board(&bid, &auth.0.identity_id),
+            state.db.has_board_key(&bid, &auth.0.identity_id),
+        )?;
+        (shared, has_bek)
+    };
+
+    // For individual share recipients (not owner, no BEK) fall back to note-level DEK check.
+    let note_level_encrypted: std::collections::HashSet<String> = if !is_owner && !all_encrypted {
+        state.db.list_encrypted_note_ids_for_board(&bid, &auth.0.identity_id).await?
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    let shared_set: std::collections::HashSet<String> = shared_ids.into_iter().collect();
     Ok(Json(
         notes
             .iter()
             .map(|n| {
+                let id = n.id.to_string();
                 let mut m = to_metadata(n);
-                m.shared = shared_ids.contains(&n.id.to_string());
+                m.shared = shared_set.contains(&id);
+                m.encrypted = all_encrypted || note_level_encrypted.contains(&id);
                 m
             })
             .collect(),
@@ -143,7 +180,7 @@ pub async fn create_note(
     let note = Note {
         id: Uuid::new_v4(),
         note_type: parse_note_type(&body.note_type)?,
-        content: vec![],
+        content: body.snippet.map(|s| s.into_bytes()).unwrap_or_default(),
         thumbnail: None,
         duration_ms: None,
         color: body.color.unwrap_or_else(|| "#FFFFFF".to_string()),
@@ -178,11 +215,25 @@ pub async fn create_note(
 )]
 pub async fn get_note(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Path(id): Path<Uuid>,
 ) -> Result<Json<NoteMetadata>, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
-    Ok(Json(to_metadata(&note)))
+    let bid = note.board_id.to_string();
+    let is_owner = state.db.owns_board(&bid, &auth.0.identity_id).await?;
+    let encrypted = if is_owner {
+        true
+    } else {
+        let has_bek = state.db.has_board_key(&bid, &auth.0.identity_id).await?;
+        if has_bek {
+            true
+        } else {
+            state.db.get_note_dek(&id.to_string(), &auth.0.identity_id).await?.is_some()
+        }
+    };
+    let mut m = to_metadata(&note);
+    m.encrypted = encrypted;
+    Ok(Json(m))
 }
 
 #[utoipa::path(
@@ -199,10 +250,23 @@ pub async fn get_note(
 )]
 pub async fn delete_note(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    let bid = note.board_id.to_string();
+    let caller = &auth.0.identity_id;
+    let is_owner = state.db.owns_board(&bid, caller).await?;
+    if !is_owner {
+        let perm = state
+            .db
+            .get_note_share_permission(&id.to_string(), caller)
+            .await?
+            .unwrap_or_default();
+        if !permission_allows(&perm, "delete") {
+            return Err(ApiError::Forbidden("delete permission required".into()));
+        }
+    }
     state.blobs.delete(&note.blob_key).await.ok();
     state.db.delete_note(id).await?;
     let _ = state
@@ -225,15 +289,32 @@ pub async fn delete_note(
 )]
 pub async fn patch_note(
     State(state): State<AppState>,
-    _auth: AuthenticatedDevice,
+    auth: AuthenticatedDevice,
     Path(id): Path<Uuid>,
     Json(body): Json<PatchNoteBody>,
 ) -> Result<StatusCode, ApiError> {
+    let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
+    let bid = note.board_id.to_string();
+    let caller = &auth.0.identity_id;
+    let is_owner = state.db.owns_board(&bid, caller).await?;
+    if !is_owner {
+        let perm = state
+            .db
+            .get_note_share_permission(&id.to_string(), caller)
+            .await?
+            .unwrap_or_default();
+        if !permission_allows(&perm, "write") {
+            return Err(ApiError::Forbidden("write permission required".into()));
+        }
+    }
     if let Some(pos) = body.position {
         state.db.update_note_position(id, pos).await?;
     }
     if let Some(color) = body.color {
         state.db.update_note_color(id, &color).await?;
+    }
+    if let Some(snippet) = body.snippet {
+        state.db.update_note_snippet(id, snippet.as_bytes()).await?;
     }
     let _ = state
         .ws_tx
@@ -261,8 +342,17 @@ pub async fn get_blob(
 ) -> Result<impl IntoResponse, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
     let bid = note.board_id.to_string();
-    if !state.db.can_access_board(&bid, &auth.0.identity_id).await? {
-        return Err(ApiError::Forbidden("no access to this board".into()));
+    let caller = &auth.0.identity_id;
+    if !state.db.can_access_board(&bid, caller).await? {
+        // Fall back to note-level share (individual share recipients have no board access).
+        let perm = state
+            .db
+            .get_note_share_permission(&id.to_string(), caller)
+            .await?
+            .unwrap_or_default();
+        if !permission_allows(&perm, "read") {
+            return Err(ApiError::Forbidden("no access to this note".into()));
+        }
     }
     let data = state.blobs.get(&note.blob_key).await?;
     Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data))
@@ -290,8 +380,17 @@ pub async fn put_blob(
 ) -> Result<StatusCode, ApiError> {
     let note = state.db.get_note(id).await?.ok_or(ApiError::NotFound)?;
     let bid = note.board_id.to_string();
-    if !state.db.owns_board(&bid, &auth.0.identity_id).await? {
-        return Err(ApiError::Forbidden("board is read-only".into()));
+    let caller = &auth.0.identity_id;
+    let is_owner = state.db.owns_board(&bid, caller).await?;
+    if !is_owner {
+        let perm = state
+            .db
+            .get_note_share_permission(&id.to_string(), caller)
+            .await?
+            .unwrap_or_default();
+        if !permission_allows(&perm, "write") {
+            return Err(ApiError::Forbidden("write permission required".into()));
+        }
     }
     state.blobs.put(&note.blob_key, &body).await?;
     Ok(StatusCode::OK)

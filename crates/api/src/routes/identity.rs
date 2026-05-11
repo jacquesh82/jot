@@ -3,6 +3,7 @@ use crate::state::AppState;
 use crate::ApiError;
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,15 @@ use utoipa::ToSchema;
 pub struct IdentityResponse {
     pub id: String,
     pub friendly_name: String,
+    /// Hex-encoded X25519 public key, if registered
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_key_x25519: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct RegisterPubkeyBody {
+    /// Hex-encoded 32-byte X25519 public key
+    pub public_key_x25519: String,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -40,8 +50,12 @@ pub async fn get_me(
         .await?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(IdentityResponse {
-        id: identity.id,
+        id: identity.id.clone(),
         friendly_name: identity.friendly_name,
+        public_key_x25519: identity
+            .public_key_x25519
+            .as_deref()
+            .map(hex::encode),
     }))
 }
 
@@ -80,10 +94,50 @@ pub async fn update_me(
     if !updated {
         state.db.insert_identity(&claims.identity_id, &name).await?;
     }
+    let identity = state
+        .db
+        .get_identity_by_id(&claims.identity_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     Ok(Json(IdentityResponse {
         id: claims.identity_id,
         friendly_name: name,
+        public_key_x25519: identity
+            .public_key_x25519
+            .as_deref()
+            .map(hex::encode),
     }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/identity/me/pubkey",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    request_body = RegisterPubkeyBody,
+    responses(
+        (status = 204, description = "Public key registered"),
+        (status = 400, description = "Invalid key format"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn set_pubkey(
+    State(state): State<AppState>,
+    AuthenticatedDevice(claims): AuthenticatedDevice,
+    Json(body): Json<RegisterPubkeyBody>,
+) -> Result<StatusCode, ApiError> {
+    let bytes = hex::decode(&body.public_key_x25519)
+        .map_err(|_| ApiError::BadRequest("public_key_x25519 must be hex-encoded".into()))?;
+    if bytes.len() != 32 {
+        return Err(ApiError::BadRequest(
+            "public_key_x25519 must be 32 bytes".into(),
+        ));
+    }
+    state
+        .db
+        .set_identity_pubkey(&claims.identity_id, &bytes)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -107,6 +161,7 @@ pub async fn get_recent_contacts(
             .map(|c| IdentityResponse {
                 id: c.id,
                 friendly_name: c.friendly_name,
+                public_key_x25519: c.public_key_x25519.as_deref().map(hex::encode),
             })
             .collect(),
     ))
@@ -136,6 +191,46 @@ pub async fn lookup_by_name(
         .ok_or(ApiError::NotFound)?;
     Ok(Json(IdentityResponse {
         id: identity.id,
-        friendly_name: identity.friendly_name,
+        friendly_name: identity.friendly_name.clone(),
+        public_key_x25519: identity.public_key_x25519.as_deref().map(hex::encode),
     }))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PrivkeyResponse {
+    /// Hex-encoded raw 32-byte X25519 private key — only served to authenticated clients of this local server.
+    pub private_key_x25519: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/identity/me/privkey",
+    tag = "identity",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "X25519 private key for this server's identity", body = PrivkeyResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn delete_identity(
+    State(state): State<AppState>,
+    AuthenticatedDevice(claims): AuthenticatedDevice,
+) -> Result<StatusCode, ApiError> {
+    let blob_keys = state
+        .db
+        .delete_identity_cascade(&claims.identity_id)
+        .await?;
+    for key in &blob_keys {
+        state.blobs.delete(key).await.ok();
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_privkey(
+    State(state): State<AppState>,
+    _auth: AuthenticatedDevice,
+) -> Json<PrivkeyResponse> {
+    Json(PrivkeyResponse {
+        private_key_x25519: hex::encode(state.identity_privkey),
+    })
 }

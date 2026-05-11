@@ -133,6 +133,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "ed25519-dalek",
+ "hex",
  "http-body-util",
  "jot-core",
  "jsonwebtoken",
@@ -945,6 +946,7 @@ version = "0.1.0"
 dependencies = [
  "api",
  "axum",
+ "base64",
  "chrono",
  "clap",
  "crossterm 0.27.0",
@@ -962,6 +964,7 @@ dependencies = [
  "tokio",
  "toml",
  "uuid",
+ "x25519-dalek",
 ]
 
 [[package]]

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Link, Check, RefreshCw, X, Pencil, Save, Plus, Trash2, Copy, Shuffle, Download } from "lucide-react";
-import { initLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, generateRandomName, exportData, createInvite, listInvites, revokeInvite, type IdentityInfo, type InviteToken } from "../api";
+import { initLink, confirmLink, getLinkStatus, decodeJwt, getIdentityMe, updateIdentityName, generateRandomName, exportData, createInvite, listInvites, revokeInvite, deleteAccount, type IdentityInfo, type InviteToken } from "../api";
 import { QrCode } from "./QrCode";
+import { t, setLocale, localeSignal, type Locale } from "../i18n";
 
 export function WhoamiPage() {
   const claims = decodeJwt();
@@ -20,6 +21,9 @@ export function WhoamiPage() {
   const [exportPassword, setExportPassword] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,20 +47,45 @@ export function WhoamiPage() {
     }
   }
 
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+
   async function generateLink() {
     setError(null);
     setLinked(false);
+    setNeedsConfirm(false);
     setLoading(true);
     if (pollRef.current) clearInterval(pollRef.current);
     try {
       const { token } = await initLink();
       setLinkToken(token);
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await getLinkStatus(token);
-          if (s.status === "confirmed") { clearInterval(pollRef.current!); setLinked(true); }
-        } catch {}
-      }, 2000);
+      // New server auto-confirms on init; check status immediately.
+      const s = await getLinkStatus(token);
+      if (s.status === "confirmed") {
+        startPolling(token);
+      } else {
+        setNeedsConfirm(true);
+      }
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
+  }
+
+  function startPolling(token: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await getLinkStatus(token);
+        if (s.status === "confirmed") { clearInterval(pollRef.current!); setLinked(true); }
+      } catch {}
+    }, 2000);
+  }
+
+  async function approveLink() {
+    if (!linkToken) return;
+    setLoading(true);
+    try {
+      await confirmLink(linkToken);
+      startPolling(linkToken);
+      setNeedsConfirm(false);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   }
@@ -147,22 +176,22 @@ export function WhoamiPage() {
 
   return (
     <div>
-      <div class="page-title"><h2>Profile</h2></div>
+      <div class="page-title"><h2>{t("whoami.profile")}</h2></div>
 
       {error && <div class="error-msg">{error}<button class="btn-icon" onClick={() => setError(null)}><X size={14} /></button></div>}
 
       {/* ── Identity info ── */}
       <div class="info-card">
         <div class="info-row">
-          <span class="info-key">Identity</span>
+          <span class="info-key">{t("whoami.identity")}</span>
           <span class="info-val">{claims?.identity_id ?? "—"}</span>
         </div>
         <div class="info-row">
-          <span class="info-key">Device</span>
+          <span class="info-key">{t("whoami.device")}</span>
           <span class="info-val">{claims?.sub ?? "—"}</span>
         </div>
         <div class="info-row" style={{ alignItems: "center" }}>
-          <span class="info-key">Name</span>
+          <span class="info-key">{t("whoami.name")}</span>
           {editingName ? (
             <div style={{ display: "flex", gap: "0.4rem", flex: 1, alignItems: "center" }}>
               <input
@@ -171,19 +200,19 @@ export function WhoamiPage() {
                 value={nameValue}
                 onInput={(e) => setNameValue((e.target as HTMLInputElement).value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }}
-                placeholder="your-unique-name"
+                placeholder={t("whoami.namePlaceholder")}
                 style={{ flex: 1, padding: "0.2rem 0.4rem" }}
               />
-              <button class="btn-primary" style={{ padding: "0.25rem 0.4rem" }} onClick={saveName} title="Save"><Save size={13} /></button>
-              <button class="btn-icon" onClick={() => setEditingName(false)} title="Cancel"><X size={13} /></button>
+              <button class="btn-primary" style={{ padding: "0.25rem 0.4rem" }} onClick={saveName} title={t("sidebar.save")}><Save size={13} /></button>
+              <button class="btn-icon" onClick={() => setEditingName(false)} title={t("whoami.cancel")}><X size={13} /></button>
             </div>
           ) : (
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flex: 1 }}>
-              <span class="info-val">{identity?.friendly_name ?? <em style={{ color: "var(--text-muted)" }}>not set</em>}</span>
-              <button class="btn-icon" onClick={() => { setNameValue(identity?.friendly_name ?? ""); setEditingName(true); }} title="Edit name">
+              <span class="info-val">{identity?.friendly_name ?? <em style={{ color: "var(--text-muted)" }}>{t("whoami.notSet")}</em>}</span>
+              <button class="btn-icon" onClick={() => { setNameValue(identity?.friendly_name ?? ""); setEditingName(true); }} title={t("whoami.editName")}>
                 <Pencil size={13} />
               </button>
-              <button class="btn-icon" onClick={() => { setNameValue(generateRandomName()); setEditingName(true); }} title="Generate random name">
+              <button class="btn-icon" onClick={() => { setNameValue(generateRandomName()); setEditingName(true); }} title={t("whoami.generateRandomName")}>
                 <Shuffle size={13} />
               </button>
             </div>
@@ -196,35 +225,49 @@ export function WhoamiPage() {
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
         <button class="btn-primary" onClick={generateLink} disabled={loading}>
           {loading ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Link size={14} />}
-          {linkToken ? "Regenerate link" : "Link a new device"}
+          {linkToken ? t("whoami.regenerateLink") : t("whoami.linkNewDevice")}
         </button>
-        {linkToken && !linked && <button onClick={cancelLink}><X size={14} /> Cancel</button>}
+        {linkToken && !linked && <button onClick={cancelLink}><X size={14} /> {t("whoami.cancel")}</button>}
       </div>
 
       {linkToken && !linked && (
         <div class="qr-box">
           <QrCode text={cmd} />
           <div>
-            <div class="qr-hint" style={{ marginBottom: "0.35rem" }}>Run in your terminal:</div>
+            <div class="qr-hint" style={{ marginBottom: "0.35rem" }}>{t("whoami.runInTerminal")}</div>
             <div class="qr-cmd">{cmd}</div>
           </div>
-          <div class="qr-hint">
-            <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
-          </div>
+          {needsConfirm ? (
+            <>
+              <div class="qr-hint" style={{ marginBottom: "0.5rem" }}>
+                {t("whoami.confirmDevice")}
+              </div>
+              <button class="btn-primary" onClick={approveLink} disabled={loading}>
+                {loading
+                  ? <RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} />
+                  : <Check size={13} />}
+                {t("whoami.confirmNewDevice")}
+              </button>
+            </>
+          ) : (
+            <div class="qr-hint">
+              <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> {t("whoami.waitingForCli")}
+            </div>
+          )}
         </div>
       )}
 
       {linked && (
         <div class="qr-box">
-          <div class="qr-success"><Check size={16} /> Device linked!</div>
-          <button onClick={cancelLink}>Close</button>
+          <div class="qr-success"><Check size={16} /> {t("whoami.deviceLinked")}</div>
+          <button onClick={cancelLink}>{t("whoami.close")}</button>
         </div>
       )}
 
       {/* ── Invitations ── */}
       <div style={{ marginTop: "1.5rem" }}>
         <div class="page-title" style={{ marginBottom: "0.75rem" }}>
-          <h2 style={{ fontSize: "1rem" }}>Invitations</h2>
+          <h2 style={{ fontSize: "1rem" }}>{t("whoami.invitations")}</h2>
         </div>
 
         {invites.filter(i => !i.revoked_at).length > 0 && (
@@ -243,12 +286,12 @@ export function WhoamiPage() {
                   <div class="item-actions" style={{ opacity: 1, display: "flex", gap: "0.3rem" }}>
                     <button
                       class="btn-icon"
-                      title={copiedToken === inv.token ? "Copied!" : "Copy invite URL"}
+                      title={copiedToken === inv.token ? t("whoami.copied") : t("whoami.copyInviteUrl")}
                       onClick={() => copyInviteUrl(inv.token)}
                     >
                       {copiedToken === inv.token ? <Check size={13} /> : <Copy size={13} />}
                     </button>
-                    <button class="btn-icon btn-danger" title="Revoke" onClick={() => handleRevokeInvite(inv.token)}>
+                    <button class="btn-icon btn-danger" title={t("whoami.revoke")} onClick={() => handleRevokeInvite(inv.token)}>
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -259,18 +302,18 @@ export function WhoamiPage() {
         )}
 
         {invites.filter(i => !i.revoked_at).length === 0 && (
-          <p class="empty-msg" style={{ padding: "0.5rem 0", textAlign: "left" }}>No active invitations.</p>
+          <p class="empty-msg" style={{ padding: "0.5rem 0", textAlign: "left" }}>{t("whoami.noActiveInvitations")}</p>
         )}
 
         <form style={{ display: "flex", gap: "0.4rem" }} onSubmit={handleCreateInvite}>
           <input
             type="text"
-            placeholder="Label (optional)…"
+            placeholder={t("whoami.labelPlaceholder")}
             value={inviteLabel}
             onInput={(e) => setInviteLabel((e.target as HTMLInputElement).value)}
             style={{ flex: 1 }}
           />
-          <button class="btn-primary" type="submit"><Plus size={13} /> New invite</button>
+          <button class="btn-primary" type="submit"><Plus size={13} /> {t("whoami.newInvite")}</button>
         </form>
         {inviteError && <p style={{ color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.3rem" }}>{inviteError}</p>}
       </div>
@@ -278,12 +321,12 @@ export function WhoamiPage() {
       {/* ── Export ── */}
       <div style={{ marginTop: "1.5rem" }}>
         <div class="page-title" style={{ marginBottom: "0.75rem" }}>
-          <h2 style={{ fontSize: "1rem" }}>Export data</h2>
+          <h2 style={{ fontSize: "1rem" }}>{t("whoami.exportData")}</h2>
         </div>
         <form style={{ display: "flex", gap: "0.4rem", alignItems: "center" }} onSubmit={handleExport}>
           <input
             type="password"
-            placeholder="Encryption password (optional)…"
+            placeholder={t("whoami.exportPasswordPlaceholder")}
             value={exportPassword}
             onInput={(e) => setExportPassword((e.target as HTMLInputElement).value)}
             style={{ flex: 1 }}
@@ -292,15 +335,87 @@ export function WhoamiPage() {
             {exporting
               ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} />
               : <Download size={14} />}
-            {exportPassword.trim() ? "Export encrypted" : "Export JSON"}
+            {exportPassword.trim() ? t("whoami.exportEncrypted") : t("whoami.exportJson")}
           </button>
         </form>
         {exportPassword.trim() && (
           <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
-            File saved as <code>.jote</code> — AES-256-GCM + PBKDF2 (200k rounds).
+            {t("whoami.exportHint")}
           </p>
         )}
         {exportError && <p style={{ color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.3rem" }}>{exportError}</p>}
+      </div>
+
+      {/* ── Language ── */}
+      <div style={{ marginTop: "1.5rem" }}>
+        <div class="page-title" style={{ marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: "1rem" }}>{t("whoami.language")}</h2>
+        </div>
+        <select
+          value={localeSignal.value}
+          onChange={(e) => setLocale((e.target as HTMLSelectElement).value as Locale)}
+          style={{ padding: "0.3rem 0.5rem", fontSize: "0.875rem", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}
+        >
+          <option value="en">🇺🇸 English</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="de">🇩🇪 Deutsch</option>
+        </select>
+        <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
+          {t("whoami.languageAuto")}
+        </p>
+      </div>
+
+      {/* ── Danger zone ── */}
+      <div style={{ marginTop: "2rem", borderTop: "1px solid var(--danger)", paddingTop: "1rem" }}>
+        <div class="page-title" style={{ marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: "1rem", color: "var(--danger)" }}>{t("whoami.dangerZone")}</h2>
+        </div>
+
+        {deleteError && (
+          <p style={{ color: "var(--danger)", fontSize: "0.8rem", marginBottom: "0.5rem" }}>{deleteError}</p>
+        )}
+
+        {!deleteConfirm ? (
+          <button
+            style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+            onClick={() => { setDeleteConfirm(true); setDeleteError(null); }}
+          >
+            <Trash2 size={14} /> {t("whoami.deleteAccount")}
+          </button>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <p style={{ fontSize: "0.85rem", color: "var(--danger)", margin: 0 }}>
+              {t("whoami.deleteAccountWarning")}
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                class="btn-danger"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setDeleteError(null);
+                  try {
+                    await deleteAccount();
+                    localStorage.removeItem("token");
+                    location.hash = "#/register";
+                  } catch (e) {
+                    setDeleteError(String(e));
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting
+                  ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} />
+                  : <Trash2 size={14} />}
+                {t("whoami.confirmDeletion")}
+              </button>
+              <button onClick={() => setDeleteConfirm(false)} disabled={deleting}>
+                <X size={14} /> {t("whoami.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

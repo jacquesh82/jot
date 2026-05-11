@@ -24,6 +24,8 @@ toml     = "0.8"
 uuid     = { version = "1", features = ["v4"] }
 chrono   = "0.4"
 hex      = "0.4"
+base64   = "0.22"
 axum     = { version = "0.7", features = ["ws", "macros"] }
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
 tempfile = "3"

@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod board_keys;
 pub mod board_shares;
 pub mod boards;
 pub mod devices;
@@ -16,7 +17,7 @@ pub mod ws;
 use crate::openapi::ApiDoc;
 use crate::state::AppState;
 use axum::{
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use utoipa::OpenApi;
@@ -40,8 +41,10 @@ pub fn build(state: AppState) -> Router {
         .route("/link/status/:token", get(link::link_status))
         .route(
             "/identity/me",
-            get(identity::get_me).patch(identity::update_me),
+            get(identity::get_me).patch(identity::update_me).delete(identity::delete_identity),
         )
+        .route("/identity/me/pubkey", put(identity::set_pubkey))
+        .route("/identity/me/privkey", get(identity::get_privkey))
         .route("/identity/contacts", get(identity::get_recent_contacts))
         .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
@@ -61,6 +64,8 @@ pub fn build(state: AppState) -> Router {
             "/notes/:id/shares/:identity_id",
             delete(shares::delete_share),
         )
+        .route("/notes/:id/dek", get(shares::get_dek).put(shares::put_dek))
+        .route("/notes/:id/deks/:identity_id", put(shares::put_dek_for_identity))
         .route(
             "/boards",
             get(boards::list_boards).post(boards::create_board),
@@ -81,6 +86,11 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/boards/:id/shares/:identity_id",
             delete(board_shares::revoke_board_share),
+        )
+        .route("/boards/:id/key", get(board_keys::get_board_key))
+        .route(
+            "/boards/:id/keys/:identity_id",
+            put(board_keys::put_board_key).delete(board_keys::delete_board_key),
         )
         .route("/export", get(export::export_data))
         .route("/devices", get(devices::list_devices))

@@ -1,5 +1,6 @@
 use crate::client::JotClient;
 use crate::error::CliError;
+use crate::t;
 use std::io::{IsTerminal, Read};
 use uuid::Uuid;
 
@@ -15,7 +16,7 @@ pub async fn run(text: Vec<String>, board: Option<Uuid>) -> Result<(), CliError>
     };
 
     if content.is_empty() {
-        eprintln!("Note content is empty — aborting.");
+        eprintln!("{}", t!("cmd.note.emptyAbort"));
         return Ok(());
     }
 
@@ -33,7 +34,7 @@ pub async fn run(text: Vec<String>, board: Option<Uuid>) -> Result<(), CliError>
     };
 
     let note_id = client.create_note(board_id, &content).await?;
-    println!("Note created: {}", note_id);
+    println!("{}", t!("cmd.note.created", "id" => note_id));
     Ok(())
 }
 
@@ -44,7 +45,7 @@ fn read_from_editor() -> Result<String, CliError> {
     std::process::Command::new(&editor)
         .arg(&path)
         .status()
-        .map_err(|e| CliError::Config(format!("failed to open editor '{}': {}", editor, e)))?;
+        .map_err(|e| CliError::Config(t!("cmd.note.editorFailed", "editor" => editor, "err" => e)))?;
     let content = std::fs::read_to_string(&path)?;
     let _ = std::fs::remove_file(&path);
     Ok(content.trim().to_string())

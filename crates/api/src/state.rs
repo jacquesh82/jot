@@ -20,6 +20,8 @@ pub struct AppState {
     pub ws_tx: broadcast::Sender<WsEvent>,
     pub open_registration: bool,
     pub schema_version: i64,
+    /// Raw 32-byte X25519 identity private key — served to the SPA so CLI and web share the same key pair.
+    pub identity_privkey: [u8; 32],
 }
 
 impl AppState {
@@ -28,6 +30,7 @@ impl AppState {
         blobs: Arc<dyn BlobStore>,
         signing_key_pem: String,
         verifying_key_pem: String,
+        identity_privkey: [u8; 32],
     ) -> Self {
         let (ws_tx, _) = broadcast::channel(128);
         Self {
@@ -38,6 +41,7 @@ impl AppState {
             ws_tx,
             open_registration: false,
             schema_version: 0,
+            identity_privkey,
         }
     }
 

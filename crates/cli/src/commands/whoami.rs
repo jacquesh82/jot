@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::error::CliError;
+use crate::t;
 
 pub async fn run() -> Result<(), CliError> {
     let config = Config::load();
@@ -11,14 +12,14 @@ pub async fn run() -> Result<(), CliError> {
             println!(
                 "Token    : {}",
                 if config.token.is_some() {
-                    "present"
+                    t!("cmd.whoami.tokenPresent")
                 } else {
-                    "absent"
+                    t!("cmd.whoami.tokenAbsent")
                 }
             );
         }
         _ => {
-            eprintln!("Not registered — run: jot serve");
+            eprintln!("{}", t!("cmd.whoami.notRegistered"));
             std::process::exit(1);
         }
     }

@@ -1,5 +1,7 @@
 use crate::config::Config;
 use crate::error::CliError;
+use crate::identity;
+use crate::t;
 use api::{
     auth::{make_claims, sign_token},
     AppState,
@@ -33,21 +35,25 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
     if after > before {
-        println!("Database schema migrated: v{} → v{}", before, after);
+        println!("{}", t!("cmd.serve.migrated", "from" => before, "to" => after));
     } else {
-        println!("Database schema: up to date (v{})", after);
+        println!("{}", t!("cmd.serve.upToDate", "v" => after));
     }
     let schema_version = after;
 
     let key_path = data_dir.join("server_key.pem");
     let (signing_pem, verifying_pem) = load_or_generate_keypair(&key_path)?;
 
+    // Load (or generate on first run) the X25519 identity key pair shared with the SPA.
+    let (identity_secret, identity_public) = identity::load_or_generate()?;
+    let identity_privkey = identity_secret.to_bytes();
+
     let blobs = Arc::new(LocalStore::new(&blobs_path));
-    let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem)
+    let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem, identity_privkey)
         .with_open_registration(open_registration)
         .with_schema_version(schema_version);
     if open_registration {
-        println!("Open registration enabled — anyone can create an account.");
+        println!("{}", t!("cmd.serve.openReg"));
     }
     let router = api::build_router(state.clone());
 
@@ -93,19 +99,25 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
             .insert_identity(&identity_id.to_string(), &friendly_name)
             .await
             .map_err(|e| CliError::Server(e.to_string()))?;
-        println!("Identity friendly name: {}", friendly_name);
+        println!("{}", t!("cmd.serve.identity", "name" => friendly_name));
+        // Register X25519 public key in DB
+        state
+            .db
+            .set_identity_pubkey(&identity_id.to_string(), identity_public.as_bytes())
+            .await
+            .map_err(|e| CliError::Server(e.to_string()))?;
 
         config.token = Some(token);
         config.device_id = Some(device_id.to_string());
         config.identity_id = Some(identity_id.to_string());
         config.save()?;
-        println!("Device registered. Token saved to config.");
+        println!("{}", t!("cmd.serve.deviceRegistered"));
 
         // Auto-create a default board so the user can start immediately
         let default_board = jot_core::models::Board {
             id: uuid::Uuid::new_v4(),
             identity_id,
-            name: "Default".to_string(),
+            name: "Notes".to_string(),
             position: 0,
             created_at: chrono::Utc::now(),
         };
@@ -114,11 +126,11 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
             .insert_board(&default_board)
             .await
             .map_err(|e| CliError::Server(e.to_string()))?;
-        println!("Default board created ({}).", default_board.id);
+        println!("{}", t!("cmd.serve.defaultBoard", "id" => default_board.id));
     }
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
-    println!("Listening on http://{}", addr);
+    println!("{}", t!("cmd.serve.listening", "addr" => addr));
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use axum::{extract::FromRequestParts, http::request::Parts};
 
 pub struct AuthenticatedDevice(pub DeviceClaims);
+pub struct OptionalDevice(pub Option<DeviceClaims>);
 
 #[async_trait]
 impl FromRequestParts<AppState> for AuthenticatedDevice {
@@ -36,5 +37,20 @@ impl FromRequestParts<AppState> for AuthenticatedDevice {
             .ok_or(ApiError::Unauthorized)?;
 
         Ok(AuthenticatedDevice(claims))
+    }
+}
+
+#[async_trait]
+impl FromRequestParts<AppState> for OptionalDevice {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        match AuthenticatedDevice::from_request_parts(parts, state).await {
+            Ok(AuthenticatedDevice(claims)) => Ok(OptionalDevice(Some(claims))),
+            Err(_) => Ok(OptionalDevice(None)),
+        }
     }
 }

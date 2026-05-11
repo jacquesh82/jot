@@ -1,5 +1,6 @@
 use crate::client::JotClient;
 use crate::error::CliError;
+use crate::t;
 use uuid::Uuid;
 
 pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(), CliError> {
@@ -8,7 +9,7 @@ pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(),
     if devices {
         let ds = client.get_devices().await?;
         if ds.is_empty() {
-            println!("(no devices)");
+            println!("{}", t!("cmd.list.noDevices"));
         } else {
             for d in &ds {
                 println!("{}\t{}\tlast_seen:{}", d.id, d.name, d.last_seen);
@@ -20,7 +21,7 @@ pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(),
     if boards {
         let bs = client.get_boards().await?;
         if bs.is_empty() {
-            println!("(no boards — run: jot new board \"My Board\")");
+            println!("{}", t!("cmd.list.noBoards"));
         } else {
             for b in &bs {
                 println!("{}\t{}", b.id, b.name);
@@ -41,7 +42,7 @@ pub async fn run(board: Option<Uuid>, boards: bool, devices: bool) -> Result<(),
 
     let notes = client.get_notes(board_id).await?;
     if notes.is_empty() {
-        println!("(no notes in this board)");
+        println!("{}", t!("cmd.list.noNotes"));
     } else {
         for note in &notes {
             println!("{}\t{}\tpos:{}", note.id, note.note_type, note.position);

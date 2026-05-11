@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { X, Save, Share2, Trash2, Eye, Code, UserPlus } from "lucide-react";
+import { X, Save, Share2, Trash2, Eye, Code, UserPlus, Check, Lock } from "lucide-react";
+import { toast } from "../toast";
+import { t } from "../i18n";
 
 const PANEL_WIDTH_KEY = "jot:panel-width";
 const DEFAULT_WIDTH = 480;
@@ -8,7 +10,7 @@ const MAX_WIDTH = 1200;
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
-  fetchNoteContent, updateNoteContent, deleteNote,
+  fetchNoteContent, updateNoteContent, deleteNote, encryptExistingNote,
   fetchShares, shareNote, revokeShare,
   type ShareEntry,
 } from "../api";
@@ -16,11 +18,12 @@ import { selectedNoteId } from "../selectedNote";
 
 interface Props {
   onDeleted: (id: string) => void;
+  onEncrypted?: (id: string) => void;
 }
 
 type ViewMode = "raw" | "preview";
 
-export function NoteEditor({ onDeleted }: Props) {
+export function NoteEditor({ onDeleted, onEncrypted }: Props) {
   const noteId = selectedNoteId.value;
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
@@ -29,9 +32,13 @@ export function NoteEditor({ onDeleted }: Props) {
   const [saving, setSaving] = useState(false);
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [shareTarget, setShareTarget] = useState("");
+  const [sharePermission, setSharePermission] = useState<"read" | "write" | "delete">("read");
   const [shareError, setShareError] = useState<string | null>(null);
   const [showSharing, setShowSharing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isEncrypted, setIsEncrypted] = useState(true);
+  const [encrypting, setEncrypting] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     const v = localStorage.getItem(PANEL_WIDTH_KEY);
     return v ? parseInt(v, 10) : DEFAULT_WIDTH;
@@ -56,11 +63,27 @@ export function NoteEditor({ onDeleted }: Props) {
 
   async function load(id: string) {
     try {
-      const text = await fetchNoteContent(id);
+      const { content: text, encrypted } = await fetchNoteContent(id);
       setContent(text);
       setDraft(text);
+      setIsEncrypted(encrypted);
     } catch (e) {
       setLoadError(String(e));
+    }
+  }
+
+  async function handleEncrypt() {
+    if (!noteId) return;
+    setEncrypting(true);
+    try {
+      await encryptExistingNote(noteId, draft);
+      setIsEncrypted(true);
+      toast(t("editor.noteEncrypted"), "success");
+      onEncrypted?.(noteId);
+    } catch (e) {
+      toast(String(e), "error");
+    } finally {
+      setEncrypting(false);
     }
   }
 
@@ -75,16 +98,25 @@ export function NoteEditor({ onDeleted }: Props) {
       await updateNoteContent(noteId, draft);
       setContent(draft);
       setDirty(false);
+    } catch (e) {
+      toast(String(e), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (!noteId || !confirm("Delete this note?")) return;
-    await deleteNote(noteId);
-    selectedNoteId.value = null;
-    onDeleted(noteId);
+    if (!noteId) return;
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setConfirmDelete(false);
+    try {
+      await deleteNote(noteId);
+      toast(t("editor.noteDeleted"), "success");
+      selectedNoteId.value = null;
+      onDeleted(noteId);
+    } catch (e) {
+      toast(String(e), "error");
+    }
   }
 
   async function handleShare(e: Event) {
@@ -92,8 +124,9 @@ export function NoteEditor({ onDeleted }: Props) {
     if (!noteId || !shareTarget.trim()) return;
     setShareError(null);
     try {
-      await shareNote(noteId, shareTarget.trim());
+      await shareNote(noteId, shareTarget.trim(), sharePermission);
       setShareTarget("");
+      setSharePermission("read");
       await loadShares(noteId);
     } catch (e) {
       setShareError(String(e));
@@ -102,8 +135,12 @@ export function NoteEditor({ onDeleted }: Props) {
 
   async function handleRevoke(targetId: string) {
     if (!noteId) return;
-    await revokeShare(noteId, targetId);
-    await loadShares(noteId);
+    try {
+      await revokeShare(noteId, targetId);
+      await loadShares(noteId);
+    } catch (e) {
+      toast(String(e), "error");
+    }
   }
 
   function toggleSharing() {
@@ -150,25 +187,41 @@ export function NoteEditor({ onDeleted }: Props) {
             <div class="btn-group">
               <button
                 class={`btn-icon ${mode === "raw" ? "btn-primary" : ""}`}
-                onClick={() => setMode("raw")} title="Raw text"
+                onClick={() => setMode("raw")} title={t("editor.rawText")}
               >
                 <Code size={14} />
               </button>
               <button
                 class={`btn-icon ${mode === "preview" ? "btn-primary" : ""}`}
-                onClick={() => setMode("preview")} title="Markdown preview"
+                onClick={() => setMode("preview")} title={t("editor.markdownPreview")}
               >
                 <Eye size={14} />
               </button>
             </div>
             <div class="btn-group" style={{ marginLeft: "auto" }}>
-              <button class="btn-icon" onClick={toggleSharing} title="Sharing">
+              {!isEncrypted && (
+                <button class="btn-icon lock-tip" data-tip={t("editor.encryptNote")} onClick={handleEncrypt} disabled={encrypting} style={{ color: "#ff9f0a" }}>
+                  <Lock size={14} />
+                </button>
+              )}
+              <button class="btn-icon" onClick={toggleSharing} title={t("editor.sharing")}>
                 <Share2 size={14} />
               </button>
-              <button class="btn-icon btn-danger" onClick={handleDelete} title="Delete note">
-                <Trash2 size={14} />
-              </button>
-              <button class="btn-icon" onClick={() => (selectedNoteId.value = null)} title="Close">
+              {confirmDelete ? (
+                <>
+                  <button class="btn-icon btn-danger" onClick={handleDelete} title={t("editor.confirmDelete")}>
+                    <Check size={14} />
+                  </button>
+                  <button class="btn-icon" onClick={() => setConfirmDelete(false)} title={t("editor.cancelDelete")}>
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <button class="btn-icon btn-danger" onClick={handleDelete} title={t("editor.deleteNote")}>
+                  <Trash2 size={14} />
+                </button>
+              )}
+              <button class="btn-icon" onClick={() => (selectedNoteId.value = null)} title={t("editor.close")}>
                 <X size={14} />
               </button>
             </div>
@@ -188,7 +241,7 @@ export function NoteEditor({ onDeleted }: Props) {
                   setDraft((e.target as HTMLTextAreaElement).value);
                   setDirty(true);
                 }}
-                placeholder="Write your note…"
+                placeholder={t("editor.notePlaceholder")}
                 spellcheck={false}
               />
             ) : (
@@ -203,10 +256,10 @@ export function NoteEditor({ onDeleted }: Props) {
           {dirty && (
             <div class="note-panel-footer">
               <button class="btn-primary" onClick={save} disabled={saving}>
-                <Save size={13} /> {saving ? "Saving…" : "Save"}
+                <Save size={13} /> {saving ? t("editor.saving") : t("editor.save")}
               </button>
               <button onClick={() => { setDraft(content); setDirty(false); }}>
-                <X size={13} /> Discard
+                <X size={13} /> {t("editor.discard")}
               </button>
             </div>
           )}
@@ -215,16 +268,19 @@ export function NoteEditor({ onDeleted }: Props) {
           {showSharing && (
             <div class="note-panel-sharing">
               <div class="sharing-title">
-                <Share2 size={13} /> Shared with
+                <Share2 size={13} /> {t("editor.sharedWith")}
               </div>
               {shares.length === 0 ? (
-                <p class="sharing-empty">Not shared yet.</p>
+                <p class="sharing-empty">{t("editor.notSharedYet")}</p>
               ) : (
                 <ul class="sharing-list">
                   {shares.map((s) => (
                     <li key={s.shared_with_id} class="sharing-row">
                       <span class="sharing-name">
                         {s.shared_with_name ?? s.shared_with_id.slice(0, 8)}
+                      </span>
+                      <span class={`perm-badge perm-${s.permission ?? "read"}`}>
+                        {s.permission ?? "read"}
                       </span>
                       <button class="btn-icon btn-danger" onClick={() => handleRevoke(s.shared_with_id)}>
                         <X size={12} />
@@ -236,10 +292,19 @@ export function NoteEditor({ onDeleted }: Props) {
               <form class="sharing-form" onSubmit={handleShare}>
                 <input
                   type="text"
-                  placeholder="Friendly name or UUID…"
+                  placeholder={t("editor.shareTargetPlaceholder")}
                   value={shareTarget}
                   onInput={(e) => setShareTarget((e.target as HTMLInputElement).value)}
                 />
+                <select
+                  class="perm-select"
+                  value={sharePermission}
+                  onChange={(e) => setSharePermission((e.target as HTMLSelectElement).value as "read" | "write" | "delete")}
+                >
+                  <option value="read">read</option>
+                  <option value="write">read+write</option>
+                  <option value="delete">read+write+delete</option>
+                </select>
                 <button class="btn-primary" type="submit" disabled={!shareTarget.trim()}>
                   <UserPlus size={13} />
                 </button>

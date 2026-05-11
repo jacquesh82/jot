@@ -7,6 +7,7 @@ import { StatsPage } from "./components/StatsPage";
 import { SharedNotesPage } from "./components/SharedNotesPage";
 import { DeviceRegister } from "./components/DeviceRegister";
 import { Folder } from "lucide-react";
+import { t } from "./i18n";
 
 type RouteView = "home" | "board" | "shared-board" | "devices" | "stats" | "whoami" | "shared" | "register";
 interface Route { view: RouteView; boardId?: string }
@@ -66,7 +67,7 @@ export function App() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: "0.75rem", color: "var(--text-muted)" }}>
           <Folder size={40} strokeWidth={1} />
-          <p style={{ fontSize: "0.9rem" }}>Select a board from the sidebar</p>
+          <p style={{ fontSize: "0.9rem" }}>{t("app.selectBoard")}</p>
         </div>
       )}
     </Layout>

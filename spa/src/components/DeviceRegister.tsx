@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { BookOpen, RefreshCw, Link } from "lucide-react";
-import { getLinkStatus } from "../api";
+import { getLinkStatus, registerPubkey } from "../api";
 import { QrCode } from "./QrCode";
+import { t } from "../i18n";
 
 const BASE = "";
 
@@ -44,6 +45,7 @@ export function DeviceRegister() {
       if (r.ok) {
         const { jwt } = await r.json();
         localStorage.setItem("token", jwt);
+        await registerPubkey();
         location.hash = "#/";
         return;
       }
@@ -81,6 +83,7 @@ export function DeviceRegister() {
           if (s.status === "confirmed" && s.jwt) {
             clearInterval(pollRef.current!);
             localStorage.setItem("token", s.jwt);
+            await registerPubkey();
             location.hash = "#/";
           }
         } catch {}
@@ -102,9 +105,9 @@ export function DeviceRegister() {
 
         {mode === "choice" && (
           <>
-            <h2 style={{ marginBottom: "0.5rem" }}>Welcome to jot</h2>
+            <h2 style={{ marginBottom: "0.5rem" }}>{t("register.welcome")}</h2>
             <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
-              What would you like to do?
+              {t("register.whatToDo")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               <button
@@ -112,13 +115,13 @@ export function DeviceRegister() {
                 style={{ justifyContent: "center", padding: "0.6rem" }}
                 onClick={() => { setMode("loading"); attemptRegister(); }}
               >
-                Create a new account
+                {t("register.createAccount")}
               </button>
               <button
                 style={{ justifyContent: "center", padding: "0.6rem" }}
                 onClick={initLink}
               >
-                <Link size={14} /> Link an existing account
+                <Link size={14} /> {t("register.linkAccount")}
               </button>
             </div>
           </>
@@ -126,13 +129,13 @@ export function DeviceRegister() {
 
         {mode === "loading" && (
           <p style={{ color: "var(--text-muted)" }}>
-            <RefreshCw size={13} style={{ display: "inline", animation: "spin 1s linear infinite" }} /> Connecting…
+            <RefreshCw size={13} style={{ display: "inline", animation: "spin 1s linear infinite" }} /> {t("register.connecting")}
           </p>
         )}
 
         {(mode === "invite_required" || mode === "registration_closed") && (
           <>
-            <h2 style={{ marginBottom: "0.75rem" }}>Create an account</h2>
+            <h2 style={{ marginBottom: "0.75rem" }}>{t("register.createAccountTitle")}</h2>
 
             {inviteError && (
               <p style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "0.5rem" }}>{inviteError}</p>
@@ -144,12 +147,12 @@ export function DeviceRegister() {
             {mode === "invite_required" && (
               <>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-                  Enter your invite token to register:
+                  {t("register.enterInviteToken")}
                 </p>
                 <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem" }}>
                   <input
                     type="text"
-                    placeholder="Invite token…"
+                    placeholder={t("register.inviteTokenPlaceholder")}
                     value={inviteInput}
                     onInput={(e) => setInviteInput((e.target as HTMLInputElement).value)}
                     onKeyDown={(e) => { if (e.key === "Enter") attemptRegister(inviteInput.trim()); }}
@@ -160,7 +163,7 @@ export function DeviceRegister() {
                     onClick={() => attemptRegister(inviteInput.trim())}
                     disabled={!inviteInput.trim()}
                   >
-                    Join
+                    {t("register.join")}
                   </button>
                 </div>
               </>
@@ -168,7 +171,7 @@ export function DeviceRegister() {
 
             {mode === "registration_closed" && (
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-                Registration is closed on this server.
+                {t("register.registrationClosed")}
               </p>
             )}
 
@@ -176,35 +179,35 @@ export function DeviceRegister() {
               onClick={() => setMode("choice")}
               style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}
             >
-              ← Back
+              {t("register.back")}
             </button>
           </>
         )}
 
         {mode === "link" && (
           <>
-            <h2 style={{ marginBottom: "0.75rem" }}>Link this device</h2>
+            <h2 style={{ marginBottom: "0.75rem" }}>{t("register.linkDevice")}</h2>
             {error ? (
               <p style={{ color: "var(--danger)" }}>{error}</p>
             ) : linkToken ? (
               <>
                 <p style={{ marginBottom: "0.5rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Run in your terminal:
+                  {t("register.runInTerminal")}
                 </p>
                 <div class="register-cmd">{cmd}</div>
                 <QrCode text={cmd} size={160} />
                 <p class="register-hint" style={{ marginTop: "0.75rem" }}>
-                  <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> Waiting for confirmation…
+                  <RefreshCw size={11} style={{ display: "inline", animation: "spin 2s linear infinite" }} /> {t("register.waitingForConfirmation")}
                 </p>
                 <button
                   onClick={() => { clearInterval(pollRef.current!); setLinkToken(null); setMode("choice"); }}
                   style={{ marginTop: "0.75rem", fontSize: "0.8rem" }}
                 >
-                  ← Back
+                  {t("register.back")}
                 </button>
               </>
             ) : (
-              <p style={{ color: "var(--text-muted)" }}>Initialising…</p>
+              <p style={{ color: "var(--text-muted)" }}>{t("register.initialising")}</p>
             )}
           </>
         )}

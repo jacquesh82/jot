@@ -1,4 +1,4 @@
-use crate::auth::{make_claims, middleware::AuthenticatedDevice, sign_token};
+use crate::auth::{make_claims, middleware::{AuthenticatedDevice, OptionalDevice}, sign_token};
 use crate::state::AppState;
 use crate::ApiError;
 use axum::{
@@ -55,18 +55,46 @@ pub struct ConfirmLinkBody {
 )]
 pub async fn init_link(
     State(state): State<AppState>,
+    OptionalDevice(caller): OptionalDevice,
 ) -> Result<(StatusCode, Json<InitLinkResponse>), ApiError> {
     let token = Uuid::new_v4().to_string();
     let code = format!("{:04}", rand::thread_rng().gen_range(0..10000));
     let expires_at = Utc::now() + chrono::Duration::minutes(5);
 
-    let session = LinkSession {
-        token: token.clone(),
-        code: code.clone(),
-        status: LinkStatus::Pending,
-        pub_key_initiator: String::new(),
-        encrypted_symkey: None,
-        expires_at,
+    let session = if let Some(claims) = caller {
+        // Authenticated caller (e.g. WhoamiPage): pre-confirm with new device JWT so the
+        // new (unauthenticated) CLI device can pick it up via link_status without needing auth.
+        let identity_id = Uuid::parse_str(&claims.identity_id)
+            .map_err(|_| ApiError::Internal("invalid identity_id in token".into()))?;
+        let new_device_id = Uuid::new_v4();
+        let device = Device {
+            id: new_device_id,
+            identity_id,
+            pub_key_x25519: String::new(),
+            pub_key_ed25519: String::new(),
+            name: "CLI".to_string(),
+            last_seen: Utc::now(),
+        };
+        state.db.insert_device(&device).await?;
+        let new_claims = make_claims(&new_device_id.to_string(), &claims.identity_id);
+        let jwt = sign_token(&new_claims, &state.signing_key_pem)?;
+        LinkSession {
+            token: token.clone(),
+            code: code.clone(),
+            status: LinkStatus::Confirmed,
+            pub_key_initiator: String::new(),
+            encrypted_symkey: Some(jwt.into_bytes()),
+            expires_at,
+        }
+    } else {
+        LinkSession {
+            token: token.clone(),
+            code: code.clone(),
+            status: LinkStatus::Pending,
+            pub_key_initiator: String::new(),
+            encrypted_symkey: None,
+            expires_at,
+        }
     };
     state.db.insert_link(&session).await?;
 

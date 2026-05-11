@@ -1,5 +1,6 @@
 use crate::client::JotClient;
 use crate::error::CliError;
+use crate::t;
 use clap::Subcommand;
 
 #[derive(Subcommand)]
@@ -16,7 +17,7 @@ pub async fn run(cmd: NewCommand) -> Result<(), CliError> {
     match cmd {
         NewCommand::Board { name } => {
             let board = client.create_board(&name).await?;
-            println!("Board created: {} ({})", board.name, board.id);
+            println!("{}", t!("cmd.board.created", "name" => board.name, "id" => board.id));
         }
     }
     Ok(())

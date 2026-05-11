@@ -119,6 +119,16 @@ impl Db {
             .await?;
         Ok(())
     }
+
+    pub async fn update_note_snippet(&self, id: Uuid, snippet: &[u8]) -> Result<(), StorageError> {
+        sqlx::query("UPDATE notes SET content = ?, updated_at = ? WHERE id = ?")
+            .bind(snippet)
+            .bind(Utc::now().to_rfc3339())
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

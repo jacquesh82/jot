@@ -24,7 +24,7 @@ pub async fn test_app_with_state() -> (Router, AppState) {
         .unwrap()
         .to_string();
     let verifying_pem = verifying_key.to_public_key_pem(Default::default()).unwrap();
-    let state = AppState::new(db, blobs, signing_pem, verifying_pem);
+    let state = AppState::new(db, blobs, signing_pem, verifying_pem, [0u8; 32]);
     let app = crate::build_router(state.clone());
     (app, state)
 }

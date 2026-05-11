@@ -101,6 +101,25 @@ impl Db {
         Ok(r.rows_affected() > 0)
     }
 
+    /// Remove all note-level DEK entries for a given identity across every note in the board.
+    /// Called when revoking a board share so the ex-member can no longer decrypt any note.
+    pub async fn delete_note_deks_for_board(
+        &self,
+        board_id: &str,
+        identity_id: &str,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            "DELETE FROM note_shares \
+             WHERE shared_with_id = ? \
+             AND note_id IN (SELECT id FROM notes WHERE board_id = ?)",
+        )
+        .bind(identity_id)
+        .bind(board_id)
+        .execute(&self.0)
+        .await?;
+        Ok(())
+    }
+
     /// Returns true if identity_id owns or has been shared the board.
     pub async fn can_access_board(
         &self,

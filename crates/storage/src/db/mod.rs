@@ -1,3 +1,4 @@
+pub mod board_keys;
 pub mod board_shares;
 pub mod boards;
 pub mod devices;

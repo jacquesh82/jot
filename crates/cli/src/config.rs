@@ -9,6 +9,8 @@ pub struct Config {
     pub token: Option<String>,
     pub device_id: Option<String>,
     pub identity_id: Option<String>,
+    #[serde(default)]
+    pub lang: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -61,6 +63,7 @@ mod tests {
             token: Some("my-jwt".to_string()),
             device_id: Some("device-abc".to_string()),
             identity_id: Some("identity-xyz".to_string()),
+            lang: None,
         };
         let contents = toml::to_string(&cfg).unwrap();
         let loaded: Config = toml::from_str(&contents).unwrap();

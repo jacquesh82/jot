@@ -1,6 +1,7 @@
 use crate::client::JotClient;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::t;
 
 pub async fn run(label: Option<String>) -> Result<(), CliError> {
     let config = Config::load();
@@ -15,11 +16,11 @@ pub async fn run(label: Option<String>) -> Result<(), CliError> {
     let base = config.server_url().trim_end_matches('/');
     let invite_url = format!("{}/#/register?invite={}", base, invite_token);
 
-    println!("Invite token created");
+    println!("{}", t!("cmd.invite.created"));
     if !label_str.is_empty() {
-        println!("  Label  : {}", label_str);
+        println!("{}", t!("cmd.invite.label", "label" => label_str));
     }
-    println!("  Token  : {}", invite_token);
-    println!("  URL    : {}", invite_url);
+    println!("{}", t!("cmd.invite.token", "token" => invite_token));
+    println!("{}", t!("cmd.invite.url", "url" => invite_url));
     Ok(())
 }

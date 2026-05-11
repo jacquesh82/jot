@@ -5,6 +5,7 @@ import { selectedNoteId } from "../selectedNote";
 import { NoteEditor } from "./NoteEditor";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { t } from "../i18n";
 
 interface SharedNoteWithContent extends SharedNote { content?: string; loaded?: boolean }
 
@@ -26,7 +27,7 @@ export function SharedNotesPage() {
   async function expand(note: SharedNoteWithContent) {
     selectedNoteId.value = note.note_id;
     if (!note.loaded) {
-      const content = await fetchNoteContent(note.note_id);
+      const { content } = await fetchNoteContent(note.note_id);
       setNotes((p) =>
         p.map((n) => n.note_id === note.note_id ? { ...n, content, loaded: true } : n)
       );
@@ -37,9 +38,9 @@ export function SharedNotesPage() {
     <div class={`notes-workspace ${panelOpen ? "panel-open" : ""}`}>
       <div class="notes-pane">
         <div class="page-title">
-          <h2>Shared with me</h2>
+          <h2>{t("shared.title")}</h2>
           <div class="page-title-actions">
-            <button class="btn-icon" onClick={load} disabled={loading} title="Refresh">
+            <button class="btn-icon" onClick={load} disabled={loading} title={t("shared.refresh")}>
               <RefreshCw size={14} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
             </button>
           </div>
@@ -48,9 +49,9 @@ export function SharedNotesPage() {
         {error && <div class="error-msg">{error}</div>}
 
         {loading ? (
-          <p class="empty-msg">Loading…</p>
+          <p class="empty-msg">{t("shared.loading")}</p>
         ) : notes.length === 0 ? (
-          <p class="empty-msg">No notes have been shared with you yet.</p>
+          <p class="empty-msg">{t("shared.noNotes")}</p>
         ) : (
           <ul class="item-list">
             {notes.map((note) => {
@@ -63,10 +64,10 @@ export function SharedNotesPage() {
                     <Share2 size={13} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
                     <div style={{ flex: 1, overflow: "hidden" }}>
                       <div class="item-name" style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
-                        {note.note_id.slice(0, 8)}
+                        {note.snippet || note.note_id.slice(0, 8)}
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        from {note.owner_friendly_name ?? note.owner_identity_id.slice(0, 8)}
+                        {t("shared.from", { owner: note.owner_friendly_name ?? note.owner_identity_id.slice(0, 8) })}
                       </div>
                     </div>
                   </div>

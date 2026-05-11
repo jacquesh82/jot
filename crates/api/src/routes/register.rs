@@ -3,7 +3,7 @@ use crate::state::AppState;
 use crate::ApiError;
 use axum::{extract::State, Json};
 use chrono::Utc;
-use jot_core::models::Device;
+use jot_core::models::{Board, Device};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -73,6 +73,19 @@ pub async fn register(
     state
         .db
         .insert_device(&device)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let default_board = Board {
+        id: Uuid::new_v4(),
+        identity_id,
+        name: "Notes".to_string(),
+        position: 0,
+        created_at: Utc::now(),
+    };
+    state
+        .db
+        .insert_board(&default_board)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

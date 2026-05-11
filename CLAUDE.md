@@ -71,6 +71,17 @@ graph_add_memory(type="decision|task|next|fact|blocker", content="one sentence m
 - `files` lists the files this decision/task relates to (can be empty)
 - Log immediately when the item arises — not at session end
 
+## Full functional parity — API / CLI / SPA
+
+Every feature must be implemented consistently across all three surfaces:
+
+- **API** — the capability must exist as a documented route.
+- **CLI** — a `jot <command>` must expose it from the terminal.
+- **SPA** — the web UI must provide equivalent access.
+
+When implementing a new capability, always deliver all three before marking the task done.
+If one surface is blocked (e.g. a design decision pending), call it out explicitly rather than leaving it silently absent.
+
 ## Session End
 
 When the user signals they are done (e.g. "bye", "done", "wrap up", "end session"), proactively update `CONTEXT.md` in the project root with:

@@ -1,3 +1,9 @@
+import {
+  encryptNoteOwner, decryptNoteOwner, decryptNoteAsMember, decryptNoteAsRecipient,
+  encryptBekForRecipient, encryptDekForRecipient,
+  getPublicKeyHex,
+} from "./crypto";
+
 const BASE = "";
 
 function token(): string {
@@ -21,9 +27,22 @@ async function authedFetch(input: string, init: RequestInit = {}): Promise<Respo
 }
 
 export interface Board { id: string; name: string; position: number }
-export interface Note  { id: string; note_type: string; position: number; shared?: boolean }
+export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean }
+export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
+
+export async function registerPubkey(): Promise<void> {
+  await authedFetch(`${BASE}/identity/me/pubkey`, {
+    method: "PUT",
+    body: JSON.stringify({ public_key_x25519: await getPublicKeyHex() }),
+  });
+}
+
+export async function deleteAccount(): Promise<void> {
+  const r = await authedFetch(`${BASE}/identity/me`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
 
 // ─── Boards ───────────────────────────────────────────────────────────────────
 
@@ -61,38 +80,132 @@ export async function fetchNotes(boardId: string): Promise<Note[]> {
   return r.json();
 }
 
-export async function fetchNoteContent(id: string): Promise<string> {
-  const r = await authedFetch(`${BASE}/notes/${id}/blob`);
-  if (!r.ok) return "";
-  return r.text();
+export async function fetchNoteMeta(id: string): Promise<NoteMeta> {
+  const r = await authedFetch(`${BASE}/notes/${id}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchNoteContent(id: string): Promise<{ content: string; encrypted: boolean }> {
+  const [metaResp, blobResp] = await Promise.all([
+    authedFetch(`${BASE}/notes/${id}`),
+    authedFetch(`${BASE}/notes/${id}/blob`),
+  ]);
+  if (!blobResp.ok) return { content: "", encrypted: false };
+  const blob = new Uint8Array(await blobResp.arrayBuffer());
+  if (!metaResp.ok) {
+    try {
+      return { content: new TextDecoder("utf-8", { fatal: true }).decode(blob), encrypted: false };
+    } catch {
+      return { content: "[chiffré — métadonnées manquantes]", encrypted: true };
+    }
+  }
+  const { board_id } = await metaResp.json() as NoteMeta;
+
+  // 1. Try owner path: derive BEK → DEK locally.
+  try {
+    return { content: await decryptNoteOwner(blob, board_id, id), encrypted: true };
+  } catch { /* not the owner or wrong key — fall through */ }
+
+  // 2. Try board-member path: fetch encrypted BEK from the API.
+  try {
+    const bekResp = await authedFetch(`${BASE}/boards/${board_id}/key`);
+    if (bekResp.ok) {
+      const { encrypted_bek, owner_pubkey_x25519 } = await bekResp.json() as {
+        encrypted_bek: string;
+        owner_pubkey_x25519?: string;
+      };
+      if (owner_pubkey_x25519) {
+        return { content: await decryptNoteAsMember(blob, encrypted_bek, owner_pubkey_x25519, id), encrypted: true };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 3. Fall back to individual note-level share (note_shares table).
+  try {
+    const dekResp = await authedFetch(`${BASE}/notes/${id}/dek`);
+    if (dekResp.ok) {
+      const { encrypted_dek, owner_pubkey_x25519 } = await dekResp.json() as {
+        encrypted_dek: string;
+        owner_pubkey_x25519?: string;
+      };
+      if (owner_pubkey_x25519) {
+        return { content: await decryptNoteAsRecipient(blob, encrypted_dek, owner_pubkey_x25519), encrypted: true };
+      }
+    }
+  } catch { /* fall through */ }
+
+  return { content: "[chiffré — clé manquante]", encrypted: true };
+}
+
+export async function encryptExistingNote(id: string, plaintext: string): Promise<void> {
+  const meta = await fetchNoteMeta(id);
+  const ciphertext = await encryptNoteOwner(plaintext, meta.board_id, id);
+  const snippet = plaintext.split("\n").find(l => l.trim()) ?? plaintext.slice(0, 80);
+  const [blobResp, patchResp] = await Promise.all([
+    authedFetch(`${BASE}/notes/${id}/blob`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: ciphertext,
+    }),
+    authedFetch(`${BASE}/notes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ snippet: snippet.slice(0, 80), size: ciphertext.length }),
+    }),
+  ]);
+  if (!blobResp.ok) throw new Error(`Impossible de chiffrer (${blobResp.status})`);
+  if (!patchResp.ok) throw new Error(`Impossible de mettre à jour (${patchResp.status})`);
 }
 
 export async function createNote(boardId: string, text: string): Promise<{ id: string }> {
+  // Create note record first to obtain the note_id (required for deterministic DEK).
+  const snippet = text.split("\n").find(l => l.trim()) ?? text.slice(0, 80);
   const r = await authedFetch(`${BASE}/notes`, {
     method: "POST",
     body: JSON.stringify({
       board_id: boardId, note_type: "text", color: null, position: 0,
       blob_key: crypto.randomUUID(),
-      size: new TextEncoder().encode(text).length,
+      size: 0,
+      snippet: snippet.slice(0, 80),
     }),
   });
   if (!r.ok) throw new Error(await r.text());
-  const { id } = await r.json();
-  await authedFetch(`${BASE}/notes/${id}/blob`, {
-    method: "PUT",
-    headers: { "Content-Type": "text/plain" },
-    body: text,
-  });
+  const { id } = await r.json() as { id: string };
+
+  // Derive DEK now that we have both board_id and note_id.
+  const ciphertext = await encryptNoteOwner(text, boardId, id);
+
+  await Promise.all([
+    authedFetch(`${BASE}/notes/${id}/blob`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: ciphertext,
+    }),
+    authedFetch(`${BASE}/notes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ size: ciphertext.length }),
+    }),
+  ]);
   return { id };
 }
 
 export async function updateNoteContent(id: string, text: string): Promise<void> {
-  const r = await authedFetch(`${BASE}/notes/${id}/blob`, {
-    method: "PUT",
-    headers: { "Content-Type": "text/plain" },
-    body: text,
-  });
-  if (!r.ok) throw new Error(await r.text());
+  const meta = await fetchNoteMeta(id);
+  const ciphertext = await encryptNoteOwner(text, meta.board_id, id);
+  const snippet = text.split("\n").find(l => l.trim()) ?? text.slice(0, 80);
+  const [blobResp, patchResp] = await Promise.all([
+    authedFetch(`${BASE}/notes/${id}/blob`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: ciphertext,
+    }),
+    authedFetch(`${BASE}/notes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ snippet: snippet.slice(0, 80) }),
+    }),
+  ]);
+  if (!blobResp.ok) throw new Error(`Impossible de sauvegarder (${blobResp.status})`);
+  if (!patchResp.ok) throw new Error(`Impossible de mettre à jour (${patchResp.status})`);
 }
 
 export async function deleteNote(id: string): Promise<void> {
@@ -123,9 +236,18 @@ export async function deleteDevice(id: string): Promise<void> {
 // ─── Link ─────────────────────────────────────────────────────────────────────
 
 export async function initLink(): Promise<{ token: string; code: string; expires_at: string }> {
-  const r = await fetch(`${BASE}/link/init`, { method: "POST" });
+  const r = await authedFetch(`${BASE}/link/init`, { method: "POST" });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
+}
+
+export async function confirmLink(linkToken: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/link/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ token: linkToken }),
+  });
+  // "not pending" means the server already auto-confirmed (new server) — ignore
+  if (!r.ok && r.status !== 400) throw new Error(await r.text());
 }
 
 export async function getLinkStatus(linkToken: string): Promise<{ status: string; jwt?: string }> {
@@ -136,7 +258,7 @@ export async function getLinkStatus(linkToken: string): Promise<{ status: string
 
 // ─── Identity ─────────────────────────────────────────────────────────────────
 
-export interface IdentityInfo { id: string; friendly_name: string }
+export interface IdentityInfo { id: string; friendly_name: string; public_key_x25519?: string }
 
 export async function getIdentityMe(): Promise<IdentityInfo> {
   const r = await authedFetch(`${BASE}/identity/me`);
@@ -199,15 +321,37 @@ export async function fetchBoardShares(boardId: string): Promise<BoardShareEntry
 }
 
 export async function shareBoardWith(boardId: string, target: string): Promise<void> {
+  const identity = await lookupIdentity(target);
+  if (!identity) throw new Error(`Identité "${target}" introuvable`);
+  if (!identity.public_key_x25519) throw new Error(`"${target}" n'a pas de clé publique — ils doivent d'abord créer une note`);
+
+  // Register our own public key so the recipient can look it up for BEK decryption.
+  await authedFetch(`${BASE}/identity/me/pubkey`, {
+    method: "PUT",
+    body: JSON.stringify({ public_key_x25519: await getPublicKeyHex() }),
+  });
+
+  // Grant board access.
   const r = await authedFetch(`${BASE}/boards/${boardId}/shares`, {
     method: "POST", body: JSON.stringify({ target }),
   });
   if (!r.ok) throw new Error(await r.text());
+
+  // Encrypt and upload the BEK for the recipient (one key, covers all board notes).
+  const encryptedBek = await encryptBekForRecipient(boardId, identity.public_key_x25519);
+  const keyResp = await authedFetch(`${BASE}/boards/${boardId}/keys/${identity.id}`, {
+    method: "PUT",
+    body: JSON.stringify({ encrypted_bek: encryptedBek }),
+  });
+  if (!keyResp.ok) throw new Error(await keyResp.text());
 }
 
 export async function revokeBoardShare(boardId: string, targetId: string): Promise<void> {
-  const r = await authedFetch(`${BASE}/boards/${boardId}/shares/${targetId}`, { method: "DELETE" });
-  if (!r.ok) throw new Error(await r.text());
+  // Delete board share and the member's BEK concurrently.
+  await Promise.all([
+    authedFetch(`${BASE}/boards/${boardId}/shares/${targetId}`, { method: "DELETE" }),
+    authedFetch(`${BASE}/boards/${boardId}/keys/${targetId}`, { method: "DELETE" }),
+  ]);
 }
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
@@ -235,8 +379,8 @@ export async function revokeInvite(token: string): Promise<void> {
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
 
-export interface ShareEntry { shared_with_id: string; shared_with_name: string | null; created_at: string }
-export interface SharedNote  { note_id: string; note_type: string; board_id: string; owner_identity_id: string; owner_friendly_name: string | null }
+export interface ShareEntry { shared_with_id: string; shared_with_name: string | null; created_at: string; permission: string; public_key_x25519?: string }
+export interface SharedNote  { note_id: string; note_type: string; board_id: string; owner_identity_id: string; owner_friendly_name: string | null; snippet?: string }
 
 export async function fetchShares(noteId: string): Promise<ShareEntry[]> {
   const r = await authedFetch(`${BASE}/notes/${noteId}/shares`);
@@ -244,14 +388,33 @@ export async function fetchShares(noteId: string): Promise<ShareEntry[]> {
   return r.json();
 }
 
-export async function shareNote(noteId: string, target: string): Promise<void> {
+export async function shareNote(noteId: string, target: string, permission: "read" | "write" | "delete" = "read"): Promise<void> {
+  const identity = await lookupIdentity(target);
+  if (!identity) throw new Error(`Identité "${target}" introuvable`);
+  if (!identity.public_key_x25519) throw new Error(`"${target}" n'a pas de clé publique enregistrée — ils doivent d'abord créer une note depuis ce compte`);
+
+  // Register our public key so the recipient can derive the ECDH wrap key.
+  await authedFetch(`${BASE}/identity/me/pubkey`, {
+    method: "PUT",
+    body: JSON.stringify({ public_key_x25519: await getPublicKeyHex() }),
+  });
+
+  // Get board_id to derive the DEK locally.
+  const meta = await fetchNoteMeta(noteId);
+
+  // Encrypt the derived DEK for the recipient.
+  const encryptedDekForRecipient = await encryptDekForRecipient(meta.board_id, noteId, identity.public_key_x25519);
+
   const r = await authedFetch(`${BASE}/notes/${noteId}/shares`, {
-    method: "POST", body: JSON.stringify({ target }),
+    method: "POST",
+    body: JSON.stringify({ target, encrypted_dek_for_recipient: encryptedDekForRecipient, permission }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 
 export async function revokeShare(noteId: string, targetId: string): Promise<void> {
+  // With deterministic BEK→DEK derivation, revocation removes the recipient's DEK entry.
+  // No re-encryption needed (the owner's DEK is never stored).
   const r = await authedFetch(`${BASE}/notes/${noteId}/shares/${targetId}`, { method: "DELETE" });
   if (!r.ok) throw new Error(await r.text());
 }
