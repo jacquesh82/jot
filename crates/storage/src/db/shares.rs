@@ -183,6 +183,39 @@ impl Db {
         Ok(row.and_then(|r| r.get("encrypted_dek")))
     }
 
+    /// Resolve the effective permission a given identity has on a note.
+    ///
+    /// Resolution order:
+    /// 1. Owner of the note's board -> "delete"
+    /// 2. Individual note share -> share's permission ("read"|"write"|"delete")
+    /// 3. Board share (member of the board the note belongs to) -> "read"
+    /// 4. Otherwise -> "none"
+    pub async fn note_permission_for(
+        &self,
+        note_id: &str,
+        identity: &str,
+    ) -> Result<String, StorageError> {
+        let row = sqlx::query("SELECT board_id FROM notes WHERE id = ?")
+            .bind(note_id)
+            .fetch_optional(&self.0)
+            .await?;
+        let board_id: Option<String> = row.map(|r| r.get::<String, _>("board_id"));
+        if let Some(ref bid) = board_id {
+            if self.owns_board(bid, identity).await? {
+                return Ok("delete".into());
+            }
+        }
+        if let Some(p) = self.get_note_share_permission(note_id, identity).await? {
+            return Ok(p);
+        }
+        if let Some(bid) = board_id {
+            if self.can_access_board(&bid, identity).await? {
+                return Ok("read".into());
+            }
+        }
+        Ok("none".into())
+    }
+
     /// Return the permission granted to identity_id on a note, or None if no share exists.
     pub async fn get_note_share_permission(
         &self,

@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod blocks;
 pub mod board_keys;
 pub mod board_shares;
 pub mod boards;
@@ -56,6 +57,17 @@ pub fn build(state: AppState) -> Router {
                 .patch(notes::patch_note),
         )
         .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
+        .route(
+            "/notes/:note_id/blocks",
+            get(blocks::list_blocks).post(blocks::create_block),
+        )
+        .route(
+            "/blocks/:id",
+            get(blocks::get_block)
+                .patch(blocks::patch_block)
+                .delete(blocks::delete_block),
+        )
+        .route("/blocks/:id/move", post(blocks::move_block))
         .route(
             "/notes/:id/shares",
             get(shares::list_shares).post(shares::share_note),
