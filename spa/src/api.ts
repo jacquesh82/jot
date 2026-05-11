@@ -452,3 +452,110 @@ export function decodeJwt(t?: string): { sub: string; identity_id: string } | nu
     return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
   } catch { return null; }
 }
+
+// ─── Blocks ───────────────────────────────────────────────────────────────────
+
+export interface BlockDto {
+  id: string;
+  note_id: string;
+  parent_block_id: string | null;
+  position: number;
+  block_type: "text" | "heading" | "todo" | "quote" | "code" | "embed" | "divider";
+  content: string;            // base64 ciphertext
+  metadata: string | null;    // base64 ciphertext
+  collapsed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listBlocks(noteId: string): Promise<BlockDto[]> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/blocks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function createBlock(
+  noteId: string,
+  input: { parent_id?: string | null; position?: number; block_type: string; content_b64: string; metadata_b64?: string | null }
+): Promise<BlockDto> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/blocks`, { method: "POST", body: JSON.stringify(input) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function patchBlock(
+  id: string,
+  patch: { block_type?: string; content_b64?: string; metadata_b64?: string | null; collapsed?: boolean }
+): Promise<BlockDto> {
+  const r = await authedFetch(`${BASE}/blocks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function deleteBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function moveBlock(id: string, new_parent_id: string | null, new_position: number): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/move`, {
+    method: "POST", body: JSON.stringify({ new_parent_id, new_position }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function indentBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/indent`, { method: "POST", body: "{}" });
+  if (!r.ok) throw new Error(await r.text());
+}
+export async function outdentBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/outdent`, { method: "POST", body: "{}" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function putBlockLinks(
+  id: string,
+  links: { target_kind: string; target_id: string; link_kind: string }[]
+): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/links`, { method: "PUT", body: JSON.stringify({ links }) });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export interface BackLinkRow {
+  source_block_id: string;
+  source_note_id: string;
+  link_kind: string;
+}
+
+export async function blockBacklinks(id: string): Promise<BackLinkRow[]> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/backlinks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function noteBacklinks(id: string): Promise<BackLinkRow[]> {
+  const r = await authedFetch(`${BASE}/notes/${id}/backlinks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export interface TagDto { name: string; color?: string | null }
+
+export async function listTags(): Promise<TagDto[]> {
+  const r = await authedFetch(`${BASE}/tags`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function putTag(name: string, color?: string | null): Promise<void> {
+  const r = await authedFetch(`${BASE}/tags/${encodeURIComponent(name)}`, {
+    method: "PUT", body: JSON.stringify({ color: color ?? null }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function blocksWithTag(name: string): Promise<string[]> {
+  const r = await authedFetch(`${BASE}/tags/${encodeURIComponent(name)}/blocks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
