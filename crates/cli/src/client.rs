@@ -42,6 +42,8 @@ pub struct NoteSummary {
     pub color: String,
     pub position: i32,
     pub snippet: Option<String>,
+    #[serde(default)]
+    pub schema_version: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -881,6 +883,21 @@ impl JotClient {
             .into_iter()
             .filter_map(|s| Uuid::parse_str(&s).ok())
             .collect())
+    }
+
+    /// Decrypt a block ciphertext using the note's DEK.
+    /// Mirrors `create_block_encrypted` / `get_note_text` derivation:
+    /// BEK = HKDF(privkey, board_id), DEK = HKDF(BEK, note_id), then AES-GCM decrypt.
+    pub async fn decrypt_with_note_dek(
+        &self,
+        board_id: Uuid,
+        note_id: Uuid,
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, CliError> {
+        let (secret, _) = identity::load_or_generate()?;
+        let dek = self.derive_dek_for(&secret, board_id, note_id)?;
+        decrypt(&dek, ciphertext)
+            .map_err(|e| CliError::Server(format!("block decryption failed: {e}")))
     }
 
     /// Encrypt block content with the note's DEK before posting it.

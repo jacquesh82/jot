@@ -1,4 +1,5 @@
 pub mod app;
+pub mod blocks;
 pub mod ui;
 
 use crate::client::JotClient;
@@ -339,6 +340,40 @@ async fn load_notes(app: &mut App) {
 
 async fn load_note_content(app: &mut App) {
     if let Some(note_id) = app.current_note_id() {
+        // If this is a block-structured text note, load its block tree instead
+        // of (or in addition to) the flat blob content.
+        let is_block_note = matches!(app.view, View::MyBoards | View::SharedBoards)
+            && app
+                .notes
+                .get(app.selected_note)
+                .map(|n| n.note_type == "text" && n.schema_version >= 1)
+                .unwrap_or(false);
+
+        if is_block_note {
+            if let Some(board_id) = app.current_board_id() {
+                app.loading_content = true;
+                app.note_content = None;
+                app.block_panel.clear();
+                match crate::tui::blocks::load(&app.client, note_id, board_id).await {
+                    Ok((blocks, plaintexts)) => {
+                        app.block_panel.note_id = Some(note_id);
+                        app.block_panel.board_id = Some(board_id);
+                        app.block_panel.blocks = blocks;
+                        app.block_panel.plaintexts = plaintexts;
+                        app.block_panel.cursor = 0;
+                        app.loading_content = false;
+                        app.status = t!("tui.msg.noteLoaded");
+                    }
+                    Err(e) => {
+                        app.loading_content = false;
+                        app.status = t!("tui.error.prefix", "msg" => e);
+                    }
+                }
+                return;
+            }
+        }
+
+        app.block_panel.clear();
         app.loading_content = true;
         app.note_content = None;
         match app.client.clone().get_note_text(note_id).await {

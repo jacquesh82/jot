@@ -43,6 +43,43 @@ pub enum Mode {
     Confirm(ConfirmAction),
 }
 
+pub struct BlockPanel {
+    pub note_id: Option<Uuid>,
+    pub board_id: Option<Uuid>,
+    pub blocks: Vec<jot_core::models::Block>,
+    pub plaintexts: std::collections::HashMap<Uuid, String>,
+    pub cursor: usize,
+    pub pending: Option<char>,
+}
+
+impl BlockPanel {
+    pub fn new() -> Self {
+        Self {
+            note_id: None,
+            board_id: None,
+            blocks: vec![],
+            plaintexts: Default::default(),
+            cursor: 0,
+            pending: None,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.note_id = None;
+        self.board_id = None;
+        self.blocks.clear();
+        self.plaintexts.clear();
+        self.cursor = 0;
+        self.pending = None;
+    }
+}
+
+impl Default for BlockPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct App {
     pub boards: Vec<BoardSummary>,
     pub selected_board: usize,
@@ -71,6 +108,7 @@ pub struct App {
     pub selected_stat: usize,
     pub server_url: String,
     pub current_device_id: Option<String>,
+    pub block_panel: BlockPanel,
 }
 
 impl App {
@@ -102,6 +140,7 @@ impl App {
             selected_stat: 0,
             server_url: cfg.server_url().to_string(),
             current_device_id: cfg.device_id.clone(),
+            block_panel: BlockPanel::new(),
         }
     }
 
@@ -377,6 +416,7 @@ mod tests {
             color: "#FFF".to_string(),
             position: 0,
             snippet: None,
+            schema_version: 0,
         }];
         app.start_delete();
         assert_eq!(app.mode, Mode::Confirm(ConfirmAction::DeleteNote(nid)));
