@@ -592,6 +592,32 @@ impl JotClient {
         Ok(())
     }
 
+    /// Encrypt a title with the note's DEK and PATCH it. `text.is_empty()` clears the title.
+    pub async fn set_note_title(&self, note_id: Uuid, text: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let title_b64: Option<String> = if text.is_empty() {
+            None
+        } else {
+            let meta = self.get_note_meta(note_id).await?;
+            let dek = self.derive_dek_local(note_id, meta.board_id).await?;
+            let ct = encrypt(&dek, text.as_bytes())
+                .map_err(|e| CliError::Server(format!("encryption failed: {e}")))?;
+            use base64::Engine;
+            Some(base64::engine::general_purpose::STANDARD.encode(&ct))
+        };
+        let resp = self
+            .inner
+            .patch(format!("{}/notes/{}/title", self.base_url, note_id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "title_b64": title_b64 }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
     pub async fn get_shared_boards(&self) -> Result<Vec<SharedBoardSummary>, CliError> {
         let auth = self.auth_header()?;
         let resp = self

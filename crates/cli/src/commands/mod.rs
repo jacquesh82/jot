@@ -7,6 +7,7 @@ pub mod link;
 pub mod list;
 pub mod migrate;
 pub mod new;
+pub mod note;
 pub mod read;
 pub mod serve;
 pub mod share;

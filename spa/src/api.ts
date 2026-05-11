@@ -27,8 +27,8 @@ async function authedFetch(input: string, init: RequestInit = {}): Promise<Respo
 }
 
 export interface Board { id: string; name: string; position: number }
-export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean; schema_version?: number }
-export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string; schema_version?: number }
+export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean; schema_version?: number; title_b64?: string | null }
+export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string; schema_version?: number; title_b64?: string | null }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
 
@@ -210,6 +210,14 @@ export async function updateNoteContent(id: string, text: string): Promise<void>
 
 export async function deleteNote(id: string): Promise<void> {
   const r = await authedFetch(`${BASE}/notes/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function patchNoteTitle(noteId: string, title_b64: string | null): Promise<void> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/title`, {
+    method: "PATCH",
+    body: JSON.stringify({ title_b64 }),
+  });
   if (!r.ok) throw new Error(await r.text());
 }
 

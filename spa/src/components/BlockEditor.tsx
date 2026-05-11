@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as api from "../api";
 import { buildTree, flatten, type BlockNode } from "../blocks/tree";
-import { decryptBlock } from "../blocks/crypto";
+import { decryptBlock, encryptBlock } from "../blocks/crypto";
 import * as keymap from "../blocks/keymap";
 import { t } from "../i18n";
 import { SlashMenu } from "./SlashMenu";
@@ -15,6 +15,32 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [flat, setFlat] = useState<BlockNode[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [slashFor, setSlashFor] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const meta = await api.fetchNoteMeta(noteId);
+        if (meta.title_b64) {
+          try { setTitle(await decryptBlock(boardId, noteId, meta.title_b64)); }
+          catch { setTitle(""); }
+        } else {
+          setTitle("");
+        }
+      } catch { setTitle(""); }
+    })();
+  }, [noteId, boardId]);
+
+  const saveTitle = async () => {
+    try {
+      if (title.trim() === "") {
+        await api.patchNoteTitle(noteId, null);
+        return;
+      }
+      const ct = await encryptBlock(boardId, noteId, title);
+      await api.patchNoteTitle(noteId, ct);
+    } catch (e) { console.warn("save title failed", e); }
+  };
 
   const refresh = async () => {
     const dtos = await api.listBlocks(noteId);
@@ -116,6 +142,14 @@ export function BlockEditor({ noteId, boardId }: Props) {
 
   return (
     <div class="block-editor">
+      <input
+        class="block-title"
+        type="text"
+        value={title}
+        onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+        onBlur={() => saveTitle()}
+        placeholder={t("block.title_placeholder")}
+      />
       {roots.length === 0 ? <p class="block-empty">{t("block.empty")}</p> : roots.map(r => renderNode(r))}
       {slashFor && (
         <SlashMenu

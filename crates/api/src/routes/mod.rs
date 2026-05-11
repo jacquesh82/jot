@@ -62,6 +62,7 @@ pub fn build(state: AppState) -> Router {
             "/notes/:id/schema-version",
             patch(notes::patch_schema_version),
         )
+        .route("/notes/:id/title", patch(notes::patch_note_title))
         .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
         .route(
             "/notes/:note_id/blocks",

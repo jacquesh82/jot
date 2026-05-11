@@ -149,6 +149,7 @@ export const es: Record<string, string> = {
 
   // BlockEditor
   "block.empty": "Presiona Enter para crear tu primer bloque.",
+  "block.title_placeholder": "Sin título",
   "block.type.text": "Texto",
   "block.type.heading": "Encabezado",
   "block.type.todo": "Tarea",
