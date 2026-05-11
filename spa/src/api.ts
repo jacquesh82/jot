@@ -27,8 +27,8 @@ async function authedFetch(input: string, init: RequestInit = {}): Promise<Respo
 }
 
 export interface Board { id: string; name: string; position: number }
-export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean }
-export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string }
+export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean; schema_version?: number }
+export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string; schema_version?: number }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
 

@@ -146,4 +146,7 @@ export const de: Record<string, string> = {
   "shared.loading": "Lade…",
   "shared.noNotes": "Es wurden noch keine Notizen mit dir geteilt.",
   "shared.from": "von {owner}",
+
+  // BlockEditor
+  "block.empty": "Drücke Enter, um deinen ersten Block zu erstellen.",
 };

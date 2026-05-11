@@ -60,6 +60,8 @@ pub struct NoteMetadata {
     pub snippet: Option<String>,
     /// True when the note blob is E2E encrypted (a DEK exists for the caller)
     pub encrypted: bool,
+    /// Block schema version: 0 = legacy single blob, 1 = block-structured
+    pub schema_version: i32,
 }
 
 fn to_metadata(note: &Note) -> NoteMetadata {
@@ -86,6 +88,7 @@ fn to_metadata(note: &Note) -> NoteMetadata {
         shared: false,
         snippet,
         encrypted: false,
+        schema_version: note.schema_version,
     }
 }
 

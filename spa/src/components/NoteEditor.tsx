@@ -14,11 +14,12 @@ const MAX_WIDTH = 1200;
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
-  fetchNoteContent, updateNoteContent, deleteNote, encryptExistingNote,
+  fetchNoteContent, fetchNoteMeta, updateNoteContent, deleteNote, encryptExistingNote,
   fetchShares, shareNote, revokeShare,
   type ShareEntry,
 } from "../api";
 import { selectedNoteId } from "../selectedNote";
+import { BlockEditor } from "./BlockEditor";
 
 interface Props {
   onDeleted: (id: string) => void;
@@ -43,6 +44,9 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isEncrypted, setIsEncrypted] = useState(true);
   const [encrypting, setEncrypting] = useState(false);
+  const [boardId, setBoardId] = useState<string | null>(null);
+  const [schemaVersion, setSchemaVersion] = useState<number>(0);
+  const [noteType, setNoteType] = useState<string>("text");
   const [panelWidth, setPanelWidth] = useState(() => {
     const v = localStorage.getItem(PANEL_WIDTH_KEY);
     return v ? parseInt(v, 10) : DEFAULT_WIDTH;
@@ -67,6 +71,10 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
 
   async function load(id: string) {
     try {
+      const meta = await fetchNoteMeta(id);
+      setBoardId(meta.board_id);
+      setSchemaVersion(meta.schema_version ?? 0);
+      setNoteType(meta.note_type);
       const { content: text, encrypted } = await fetchNoteContent(id);
       setContent(text);
       setDraft(text);
@@ -335,7 +343,9 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
 
           {/* ── Body ── */}
           <div class="note-panel-body">
-            {mode === "raw" ? (
+            {noteType === "text" && schemaVersion >= 1 && boardId && noteId ? (
+              <BlockEditor noteId={noteId} boardId={boardId} />
+            ) : mode === "raw" ? (
               <textarea
                 ref={textareaRef}
                 class="note-panel-textarea"
