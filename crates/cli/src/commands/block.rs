@@ -119,11 +119,85 @@ pub async fn run(cmd: BlockCmd) -> Result<(), CliError> {
                     .unwrap_or_else(|_| body.to_string())
             );
         }
-        BlockCmd::Migrate { .. } => {
-            return Err(CliError::Config(
-                "not yet implemented — see Task 14".into(),
-            ));
+        BlockCmd::Migrate { all, note, dry_run } => {
+            migrate(&client, all, note, dry_run).await?;
         }
+    }
+    Ok(())
+}
+
+/// Lazy migration of legacy text notes (schema_version=0) into block-structured form.
+///
+/// For each target note:
+///   1. Fetch and decrypt the note's full plaintext (`get_note_text`, which derives
+///      DEK = HKDF(BEK=HKDF(privkey, board_id), note_id) and AES-GCM-decrypts).
+///   2. Split the markdown into `SplitBlock`s via `jot_core::blocks::split_markdown`.
+///   3. For each split block, encrypt its content with the note's DEK (same DEK as
+///      the original note blob) via `JotClient::create_block_encrypted`, preserving
+///      parent/child relationships derived from the indent column.
+///   4. Mark the note `schema_version = 1`.
+async fn migrate(
+    client: &JotClient,
+    all: bool,
+    note: Option<Uuid>,
+    dry_run: bool,
+) -> Result<(), CliError> {
+    use jot_core::blocks::split_markdown;
+
+    let targets: Vec<Uuid> = if all {
+        client.list_legacy_text_notes().await?
+    } else {
+        vec![note.ok_or_else(|| CliError::Config("--note or --all is required".into()))?]
+    };
+
+    if targets.is_empty() {
+        println!("no legacy text notes to migrate");
+        return Ok(());
+    }
+
+    for n in targets {
+        let md = match client.get_note_text(n).await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("skip {} (cannot decrypt: {})", n, e);
+                continue;
+            }
+        };
+        let parts = split_markdown(&md);
+        println!(
+            "note {} -> {} block(s){}",
+            n,
+            parts.len(),
+            if dry_run { " (dry-run)" } else { "" }
+        );
+        if dry_run {
+            continue;
+        }
+
+        // Build parent/child stack from indent column.
+        let mut indent_stack: Vec<(u8, Uuid)> = Vec::new();
+        for (i, p) in parts.iter().enumerate() {
+            while let Some(&(top, _)) = indent_stack.last() {
+                if top >= p.indent {
+                    indent_stack.pop();
+                } else {
+                    break;
+                }
+            }
+            let parent = indent_stack.last().map(|(_, id)| *id);
+            let position = Some(i as f64);
+            let b = client
+                .create_block_encrypted(
+                    n,
+                    parent,
+                    position,
+                    p.block_type.as_str(),
+                    p.content.as_bytes(),
+                )
+                .await?;
+            indent_stack.push((p.indent, b.id));
+        }
+        client.set_note_schema_version(n, 1).await?;
     }
     Ok(())
 }

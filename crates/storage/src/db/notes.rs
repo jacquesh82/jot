@@ -156,6 +156,26 @@ impl Db {
         Ok(())
     }
 
+    pub async fn list_legacy_text_notes_for_identity(
+        &self,
+        identity: Uuid,
+    ) -> Result<Vec<Uuid>, StorageError> {
+        let rows = sqlx::query(
+            "SELECT n.id FROM notes n JOIN boards b ON b.id = n.board_id
+             WHERE b.identity_id = ? AND n.note_type = 'text' AND n.schema_version = 0",
+        )
+        .bind(identity.to_string())
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows
+            .iter()
+            .filter_map(|r| {
+                let s: String = r.get("id");
+                Uuid::parse_str(&s).ok()
+            })
+            .collect())
+    }
+
     pub async fn set_note_schema_version(
         &self,
         id: Uuid,

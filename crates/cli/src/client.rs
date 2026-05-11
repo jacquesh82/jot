@@ -839,6 +839,69 @@ impl JotClient {
         Ok(())
     }
 
+    /// Update a note's schema_version. Used by `jot block migrate` to mark a note
+    /// as fully migrated to the block-structured form.
+    pub async fn set_note_schema_version(
+        &self,
+        note_id: Uuid,
+        version: i32,
+    ) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .patch(format!(
+                "{}/notes/{}/schema-version",
+                self.base_url, note_id
+            ))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "schema_version": version }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    /// List ids of text notes owned by the caller that have not yet been
+    /// migrated to block form (schema_version = 0).
+    pub async fn list_legacy_text_notes(&self) -> Result<Vec<Uuid>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/legacy-text", self.base_url))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        let ids: Vec<String> = resp.json().await?;
+        Ok(ids
+            .into_iter()
+            .filter_map(|s| Uuid::parse_str(&s).ok())
+            .collect())
+    }
+
+    /// Encrypt block content with the note's DEK before posting it.
+    /// Mirrors the encrypt-on-write path used by `create_note` / `update_note`.
+    pub async fn create_block_encrypted(
+        &self,
+        note_id: Uuid,
+        parent: Option<Uuid>,
+        position: Option<f64>,
+        block_type: &str,
+        plaintext: &[u8],
+    ) -> Result<jot_core::models::Block, CliError> {
+        let meta = self.get_note_meta(note_id).await?;
+        let (secret, _) = identity::load_or_generate()?;
+        let dek = self.derive_dek_for(&secret, meta.board_id, note_id)?;
+        let ciphertext = encrypt(&dek, plaintext)
+            .map_err(|e| CliError::Server(format!("block encryption failed: {e}")))?;
+        self.create_block(note_id, parent, position, block_type, &ciphertext, None)
+            .await
+    }
+
     pub async fn block_backlinks(&self, id: Uuid) -> Result<serde_json::Value, CliError> {
         let auth = self.auth_header()?;
         let resp = self

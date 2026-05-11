@@ -400,6 +400,43 @@ pub async fn put_blob(
     Ok(StatusCode::OK)
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct PatchSchemaVersionBody {
+    pub schema_version: i32,
+}
+
+pub async fn patch_schema_version(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PatchSchemaVersionBody>,
+) -> Result<StatusCode, ApiError> {
+    let perm = state
+        .db
+        .note_permission_for(&id.to_string(), &auth.0.identity_id)
+        .await?;
+    if !permission_allows(&perm, "write") {
+        return Err(ApiError::Forbidden(
+            "no write permission on note".into(),
+        ));
+    }
+    state.db.set_note_schema_version(id, body.schema_version).await?;
+    let _ = state
+        .ws_tx
+        .send(WsEvent::NoteUpdated { id: id.to_string() });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_legacy_text_notes(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let identity = Uuid::parse_str(&auth.0.identity_id)
+        .map_err(|_| ApiError::BadRequest("bad identity id".into()))?;
+    let ids = state.db.list_legacy_text_notes_for_identity(identity).await?;
+    Ok(Json(ids.into_iter().map(|i| i.to_string()).collect()))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_helpers::test_app;

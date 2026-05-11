@@ -51,11 +51,16 @@ pub fn build(state: AppState) -> Router {
         .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
         .route("/notes/shared", get(shares::get_shared_with_me))
+        .route("/notes/legacy-text", get(notes::list_legacy_text_notes))
         .route(
             "/notes/:id",
             get(notes::get_note)
                 .delete(notes::delete_note)
                 .patch(notes::patch_note),
+        )
+        .route(
+            "/notes/:id/schema-version",
+            patch(notes::patch_schema_version),
         )
         .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
         .route(
