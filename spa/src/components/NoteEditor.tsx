@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { X, Save, Share2, Trash2, Eye, Code, UserPlus, Check, Lock } from "lucide-react";
+import {
+  X, Save, Share2, Trash2, Eye, Code, UserPlus, Check, Lock,
+  Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
+  Code2, Quote, List, ListOrdered, Link2, Minus,
+} from "lucide-react";
 import { toast } from "../toast";
 import { t } from "../i18n";
 
@@ -170,6 +174,82 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
     document.addEventListener("mouseup", onUp);
   }
 
+  // ── Markdown insertion helpers ───────────────────────────────────────────────
+  function insert(before: string, after: string, placeholder: string) {
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = el.selectionStart;
+    const e = el.selectionEnd;
+    const sel = draft.slice(s, e);
+    const inner = sel || placeholder;
+    const next = draft.slice(0, s) + before + inner + after + draft.slice(e);
+    setDraft(next);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(s + before.length, s + before.length + inner.length);
+    });
+  }
+
+  function insertLink() {
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = el.selectionStart;
+    const e = el.selectionEnd;
+    const sel = draft.slice(s, e);
+    const label = sel || "text";
+    const next = draft.slice(0, s) + `[${label}](url)` + draft.slice(e);
+    setDraft(next);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      const urlStart = s + 1 + label.length + 2;
+      el.setSelectionRange(urlStart, urlStart + 3);
+    });
+  }
+
+  function insertCodeBlock() {
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = el.selectionStart;
+    const e = el.selectionEnd;
+    const sel = draft.slice(s, e);
+    const inner = sel || "code";
+    const block = "```\n" + inner + "\n```";
+    const next = draft.slice(0, s) + block + draft.slice(e);
+    setDraft(next);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(s + 4, s + 4 + inner.length);
+    });
+  }
+
+  function insertHR() {
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = el.selectionStart;
+    const hr = "\n---\n";
+    const next = draft.slice(0, s) + hr + draft.slice(s);
+    setDraft(next);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = s + hr.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key) {
+        case "b": e.preventDefault(); insert("**", "**", "bold"); break;
+        case "i": e.preventDefault(); insert("*", "*", "italic"); break;
+        case "k": e.preventDefault(); insertLink(); break;
+      }
+    }
+  }
+
   const html = DOMPurify.sanitize(marked.parse(draft) as string);
   const open = !!noteId;
 
@@ -227,6 +307,29 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
             </div>
           </div>
 
+          {/* ── Markdown toolbar (raw mode only) ── */}
+          {mode === "raw" && (
+            <div class="note-panel-toolbar">
+              <button class="tb-btn" title="Bold (Ctrl+B)" onClick={() => insert("**", "**", "bold")}><Bold size={13} /></button>
+              <button class="tb-btn" title="Italic (Ctrl+I)" onClick={() => insert("*", "*", "italic")}><Italic size={13} /></button>
+              <button class="tb-btn" title="Strikethrough" onClick={() => insert("~~", "~~", "text")}><Strikethrough size={13} /></button>
+              <span class="tb-sep" />
+              <button class="tb-btn" title="Heading 1" onClick={() => insert("# ", "", "Heading")}><Heading1 size={13} /></button>
+              <button class="tb-btn" title="Heading 2" onClick={() => insert("## ", "", "Heading")}><Heading2 size={13} /></button>
+              <button class="tb-btn" title="Heading 3" onClick={() => insert("### ", "", "Heading")}><Heading3 size={13} /></button>
+              <span class="tb-sep" />
+              <button class="tb-btn" title="Inline code" onClick={() => insert("`", "`", "code")}><Code size={13} /></button>
+              <button class="tb-btn" title="Code block" onClick={insertCodeBlock}><Code2 size={13} /></button>
+              <span class="tb-sep" />
+              <button class="tb-btn" title="Blockquote" onClick={() => insert("> ", "", "quote")}><Quote size={13} /></button>
+              <button class="tb-btn" title="Bulleted list" onClick={() => insert("- ", "", "item")}><List size={13} /></button>
+              <button class="tb-btn" title="Numbered list" onClick={() => insert("1. ", "", "item")}><ListOrdered size={13} /></button>
+              <span class="tb-sep" />
+              <button class="tb-btn" title="Link (Ctrl+K)" onClick={insertLink}><Link2 size={13} /></button>
+              <button class="tb-btn" title="Horizontal rule" onClick={insertHR}><Minus size={13} /></button>
+            </div>
+          )}
+
           {/* ── Error ── */}
           {loadError && <div class="error-msg" style={{ margin: "0.5rem" }}>{loadError}</div>}
 
@@ -241,6 +344,7 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
                   setDraft((e.target as HTMLTextAreaElement).value);
                   setDirty(true);
                 }}
+                onKeyDown={handleKeyDown}
                 placeholder={t("editor.notePlaceholder")}
                 spellcheck={false}
               />

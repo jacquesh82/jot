@@ -486,8 +486,22 @@ async fn edit_in_editor(
         .show_cursor()
         .map_err(|e| CliError::Server(format!("show cursor: {e}")))?;
 
-    // Launch editor
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+    // Launch editor: $VISUAL, then $EDITOR, then first candidate found in PATH
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .unwrap_or_else(|_| {
+            for candidate in &["nvim", "vim", "nano", "vi"] {
+                if std::process::Command::new("which")
+                    .arg(candidate)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+                {
+                    return candidate.to_string();
+                }
+            }
+            "vi".to_string()
+        });
     std::process::Command::new(&editor)
         .arg(tmp.path())
         .status()
