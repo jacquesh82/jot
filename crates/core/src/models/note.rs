@@ -24,4 +24,12 @@ pub struct Note {
     pub size: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub title: Option<Vec<u8>>,
+    #[serde(default)]
+    pub is_journal: bool,
+    #[serde(default)]
+    pub journal_date: Option<String>,
+    #[serde(default)]
+    pub schema_version: i32,
 }

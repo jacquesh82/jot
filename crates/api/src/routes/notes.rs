@@ -190,6 +190,10 @@ pub async fn create_note(
         size: body.size,
         created_at: now,
         updated_at: now,
+        title: None,
+        is_journal: false,
+        journal_date: None,
+        schema_version: 0,
     };
     state.db.insert_note(&note).await?;
     let _ = state.ws_tx.send(WsEvent::NoteUpdated {

@@ -44,6 +44,10 @@ fn note_from_row(row: &sqlx::sqlite::SqliteRow) -> Note {
         updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
             .unwrap()
             .with_timezone(&Utc),
+        title: None,
+        is_journal: false,
+        journal_date: None,
+        schema_version: 0,
     }
 }
 
@@ -151,6 +155,10 @@ mod tests {
             size: 14,
             created_at: now,
             updated_at: now,
+            title: None,
+            is_journal: false,
+            journal_date: None,
+            schema_version: 0,
         }
     }
 
