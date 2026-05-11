@@ -1,3 +1,4 @@
+pub mod blocks;
 pub mod crypto;
 pub mod error;
 pub mod models;
