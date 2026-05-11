@@ -227,3 +227,137 @@ pub async fn move_block(
     });
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub async fn indent_block(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let b = state.db.get_block(id).await?.ok_or(ApiError::NotFound)?;
+    require_write(&state, b.note_id, &auth.0.identity_id).await?;
+    let prev = state
+        .db
+        .previous_sibling(b.note_id, b.parent_block_id, b.position)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("no preceding sibling to indent under".into()))?;
+    let max_under_prev = state.db.max_position(b.note_id, Some(prev.id)).await?;
+    state
+        .db
+        .move_block(id, Some(prev.id), max_under_prev + 1.0)
+        .await?;
+    let _ = state.ws_tx.send(WsEvent::BlockMoved {
+        note_id: b.note_id.to_string(),
+        block_id: id.to_string(),
+    });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn outdent_block(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let b = state.db.get_block(id).await?.ok_or(ApiError::NotFound)?;
+    require_write(&state, b.note_id, &auth.0.identity_id).await?;
+    let parent_id = b
+        .parent_block_id
+        .ok_or_else(|| ApiError::BadRequest("block is already at root".into()))?;
+    let parent = state.db.get_block(parent_id).await?.ok_or(ApiError::NotFound)?;
+    let next_pos = parent.position + 0.5;
+    state
+        .db
+        .move_block(id, parent.parent_block_id, next_pos)
+        .await?;
+    let _ = state.ws_tx.send(WsEvent::BlockMoved {
+        note_id: b.note_id.to_string(),
+        block_id: id.to_string(),
+    });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn block_backlinks(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<storage::db::block_links::BackLinkRow>>, ApiError> {
+    let mut visible = Vec::new();
+    for l in state.db.backlinks_to_block(id).await? {
+        if let Some(src) = state.db.get_block(l.source_block_id).await? {
+            let perm = state
+                .db
+                .note_permission_for(src.note_id.to_string().as_str(), &auth.0.identity_id)
+                .await?;
+            if permission_allows(&perm, "read") {
+                visible.push(storage::db::block_links::BackLinkRow {
+                    source_block_id: l.source_block_id.to_string(),
+                    source_note_id: src.note_id.to_string(),
+                    link_kind: l.link_kind.as_str().to_string(),
+                });
+            }
+        }
+    }
+    Ok(Json(visible))
+}
+
+pub async fn note_backlinks(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<storage::db::block_links::BackLinkRow>>, ApiError> {
+    let mut visible = Vec::new();
+    for l in state.db.backlinks_to_note(id).await? {
+        if let Some(src) = state.db.get_block(l.source_block_id).await? {
+            let perm = state
+                .db
+                .note_permission_for(src.note_id.to_string().as_str(), &auth.0.identity_id)
+                .await?;
+            if permission_allows(&perm, "read") {
+                visible.push(storage::db::block_links::BackLinkRow {
+                    source_block_id: l.source_block_id.to_string(),
+                    source_note_id: src.note_id.to_string(),
+                    link_kind: l.link_kind.as_str().to_string(),
+                });
+            }
+        }
+    }
+    Ok(Json(visible))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PutLinksBody {
+    pub links: Vec<LinkInput>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct LinkInput {
+    pub target_kind: String,
+    pub target_id: String,
+    pub link_kind: String,
+}
+
+pub async fn put_block_links(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PutLinksBody>,
+) -> Result<StatusCode, ApiError> {
+    let b = state.db.get_block(id).await?.ok_or(ApiError::NotFound)?;
+    require_write(&state, b.note_id, &auth.0.identity_id).await?;
+    let now = Utc::now();
+    let links: Vec<_> = body
+        .links
+        .into_iter()
+        .map(|l| jot_core::models::BlockLink {
+            id: Uuid::new_v4(),
+            source_block_id: id,
+            target_kind: jot_core::models::TargetKind::from_str(&l.target_kind)
+                .unwrap_or(jot_core::models::TargetKind::Note),
+            target_id: l.target_id,
+            link_kind: jot_core::models::LinkKind::from_str(&l.link_kind)
+                .unwrap_or(jot_core::models::LinkKind::PageRef),
+            created_at: now,
+        })
+        .collect();
+    state.db.replace_links_for_block(id, &links).await?;
+    Ok(StatusCode::NO_CONTENT)
+}

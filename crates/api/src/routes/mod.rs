@@ -13,6 +13,7 @@ pub mod notes;
 pub mod register;
 pub mod shares;
 pub mod spa;
+pub mod tags;
 pub mod ws;
 
 use crate::openapi::ApiDoc;
@@ -68,6 +69,14 @@ pub fn build(state: AppState) -> Router {
                 .delete(blocks::delete_block),
         )
         .route("/blocks/:id/move", post(blocks::move_block))
+        .route("/blocks/:id/indent", post(blocks::indent_block))
+        .route("/blocks/:id/outdent", post(blocks::outdent_block))
+        .route("/blocks/:id/backlinks", get(blocks::block_backlinks))
+        .route("/blocks/:id/links", put(blocks::put_block_links))
+        .route("/notes/:id/backlinks", get(blocks::note_backlinks))
+        .route("/tags", get(tags::list_tags))
+        .route("/tags/:name", put(tags::put_tag))
+        .route("/tags/:name/blocks", get(tags::blocks_with_tag))
         .route(
             "/notes/:id/shares",
             get(shares::list_shares).post(shares::share_note),

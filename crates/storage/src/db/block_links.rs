@@ -5,6 +5,13 @@ use jot_core::models::{BlockLink, LinkKind, TargetKind};
 use sqlx::Row;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BackLinkRow {
+    pub source_block_id: String,
+    pub source_note_id: String,
+    pub link_kind: String,
+}
+
 fn row_to_link(row: &sqlx::sqlite::SqliteRow) -> BlockLink {
     let id: String = row.get("id");
     let src: String = row.get("source_block_id");

@@ -89,6 +89,15 @@ impl Db {
         Ok(())
     }
 
+    pub async fn previous_sibling(&self, note: Uuid, parent: Option<Uuid>, before_pos: f64) -> Result<Option<Block>, StorageError> {
+        let row = sqlx::query(
+            "SELECT * FROM blocks WHERE note_id = ? AND parent_block_id IS ? AND position < ?
+             ORDER BY position DESC LIMIT 1"
+        ).bind(note.to_string()).bind(parent.map(|p| p.to_string())).bind(before_pos)
+        .fetch_optional(&self.0).await?;
+        Ok(row.map(|r| row_to_block(&r)))
+    }
+
     pub async fn max_position(&self, note_id: Uuid, parent: Option<Uuid>) -> Result<f64, StorageError> {
         let row = sqlx::query(
             "SELECT COALESCE(MAX(position), 0.0) AS m FROM blocks WHERE note_id = ? AND parent_block_id IS ?"
@@ -161,6 +170,22 @@ mod tests {
         db.move_block(b.id, Some(a.id), 1.0).await.unwrap();
         let fetched = db.get_block(b.id).await.unwrap().unwrap();
         assert_eq!(fetched.parent_block_id, Some(a.id));
+    }
+
+    #[tokio::test]
+    async fn previous_sibling_returns_max_below_position() {
+        let db = test_db().await;
+        let (_b, n) = seed_note(&db).await;
+        let a = make_block(n, None, 1.0);
+        let b = make_block(n, None, 2.0);
+        let c = make_block(n, None, 3.0);
+        db.insert_block(&a).await.unwrap();
+        db.insert_block(&b).await.unwrap();
+        db.insert_block(&c).await.unwrap();
+        let prev = db.previous_sibling(n, None, 3.0).await.unwrap().unwrap();
+        assert_eq!(prev.id, b.id);
+        let none = db.previous_sibling(n, None, 1.0).await.unwrap();
+        assert!(none.is_none());
     }
 
     #[tokio::test]
