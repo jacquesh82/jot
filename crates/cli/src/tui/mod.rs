@@ -80,7 +80,100 @@ async fn event_loop(
         if let Some(note_id) = app.pending_edit.take() {
             edit_in_editor(terminal, app, note_id).await?;
         }
+
+        if let Some(block_id) = app.pending_block_edit.take() {
+            edit_block_in_editor(terminal, app, block_id).await?;
+        }
     }
+    Ok(())
+}
+
+async fn edit_block_in_editor(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    block_id: Uuid,
+) -> Result<(), CliError> {
+    let note_id = match app.block_panel.note_id {
+        Some(n) => n,
+        None => return Ok(()),
+    };
+    let board_id = match app.block_panel.board_id {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    let original = app
+        .block_panel
+        .plaintexts
+        .get(&block_id)
+        .cloned()
+        .unwrap_or_default();
+
+    // Leave TUI
+    disable_raw_mode().map_err(|e| CliError::Server(format!("raw mode: {e}")))?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )
+    .map_err(|e| CliError::Server(format!("leave screen: {e}")))?;
+    terminal
+        .show_cursor()
+        .map_err(|e| CliError::Server(format!("show cursor: {e}")))?;
+
+    let edited_result = crate::commands::block::edit_in_editor(&original);
+
+    // Re-enter TUI
+    enable_raw_mode().map_err(|e| CliError::Server(format!("raw mode: {e}")))?;
+    execute!(
+        terminal.backend_mut(),
+        EnterAlternateScreen,
+        EnableMouseCapture
+    )
+    .map_err(|e| CliError::Server(format!("enter screen: {e}")))?;
+    terminal
+        .clear()
+        .map_err(|e| CliError::Server(format!("clear: {e}")))?;
+
+    let edited = match edited_result {
+        Ok(s) => s,
+        Err(e) => {
+            app.status = t!("tui.error.prefix", "msg" => e);
+            return Ok(());
+        }
+    };
+
+    if edited == original {
+        app.status = t!("tui.msg.noChanges");
+        return Ok(());
+    }
+
+    // Encrypt with note DEK, base64-encode, PATCH the block.
+    let ciphertext = match app
+        .client
+        .clone()
+        .encrypt_with_note_dek(board_id, note_id, edited.as_bytes())
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            app.status = t!("tui.error.prefix", "msg" => e);
+            return Ok(());
+        }
+    };
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&ciphertext);
+    if let Err(e) = app
+        .client
+        .clone()
+        .patch_block_content_b64(block_id, &b64)
+        .await
+    {
+        app.status = t!("tui.error.prefix", "msg" => e);
+        return Ok(());
+    }
+
+    reload_block_panel(app, note_id, board_id).await;
+    app.status = t!("tui.msg.noteSaved");
     Ok(())
 }
 
@@ -131,6 +224,22 @@ async fn handle_normal(app: &mut App, code: KeyCode) {
     // Profile / Stats: read-only, no extra key handling
     if matches!(app.view, View::Profile | View::Stats) {
         return;
+    }
+
+    // Block-tree keybindings — fire when the right pane is focused on a
+    // v1 text note and the BlockPanel has been loaded.
+    if app.focus == Focus::Notes
+        && matches!(app.view, View::MyBoards | View::SharedBoards)
+        && app.block_panel.note_id.is_some()
+        && app
+            .notes
+            .get(app.selected_note)
+            .map(|n| n.note_type == "text" && n.schema_version >= 1)
+            .unwrap_or(false)
+    {
+        if handle_block_keys(app, code).await {
+            return;
+        }
     }
 
     // Normal MyBoards / SharedBoards / SharedNotes handling
@@ -212,6 +321,163 @@ async fn handle_normal(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('X') => app.start_delete_account(),
         _ => {}
+    }
+}
+
+/// Returns `true` if the key was consumed by the block dispatcher.
+async fn handle_block_keys(app: &mut App, code: KeyCode) -> bool {
+    let note_id = match app.block_panel.note_id {
+        Some(n) => n,
+        None => return false,
+    };
+    let board_id = match app.block_panel.board_id {
+        Some(b) => b,
+        None => return false,
+    };
+
+    let flat: Vec<jot_core::models::Block> = crate::tui::blocks::flatten_depth_first(&app.block_panel.blocks)
+        .into_iter()
+        .cloned()
+        .collect();
+    let flat_len = flat.len();
+    let current = flat.get(app.block_panel.cursor).cloned();
+
+    match code {
+        KeyCode::Char('j') => {
+            if app.block_panel.cursor + 1 < flat_len {
+                app.block_panel.cursor += 1;
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Char('k') => {
+            if app.block_panel.cursor > 0 {
+                app.block_panel.cursor -= 1;
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Char('o') => {
+            let (parent, position) = match current.as_ref() {
+                Some(c) => (c.parent_block_id, Some(c.position + 0.5)),
+                None => (None, None),
+            };
+            match app
+                .client
+                .clone()
+                .create_block_encrypted(note_id, parent, position, "text", b"")
+                .await
+            {
+                Ok(_) => reload_block_panel(app, note_id, board_id).await,
+                Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Char('>') => {
+            if let Some(c) = current.as_ref() {
+                if let Err(e) = app.client.clone().indent_block(c.id).await {
+                    app.status = t!("tui.error.prefix", "msg" => e);
+                } else {
+                    reload_block_panel(app, note_id, board_id).await;
+                }
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Char('<') => {
+            if let Some(c) = current.as_ref() {
+                if let Err(e) = app.client.clone().outdent_block(c.id).await {
+                    app.status = t!("tui.error.prefix", "msg" => e);
+                } else {
+                    reload_block_panel(app, note_id, board_id).await;
+                }
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Char('d') => {
+            if app.block_panel.pending == Some('d') {
+                if let Some(c) = current.as_ref() {
+                    if let Err(e) = app.client.clone().delete_block(c.id).await {
+                        app.status = t!("tui.error.prefix", "msg" => e);
+                    } else {
+                        reload_block_panel(app, note_id, board_id).await;
+                        let new_len =
+                            crate::tui::blocks::flatten_depth_first(&app.block_panel.blocks).len();
+                        if app.block_panel.cursor >= new_len && app.block_panel.cursor > 0 {
+                            app.block_panel.cursor -= 1;
+                        }
+                    }
+                }
+                app.block_panel.pending = None;
+            } else {
+                app.block_panel.pending = Some('d');
+            }
+            true
+        }
+        KeyCode::Char('y') => {
+            if app.block_panel.pending == Some('y') {
+                if let Some(c) = current.as_ref() {
+                    match arboard::Clipboard::new() {
+                        Ok(mut cb) => {
+                            if let Err(e) = cb.set_text(format!("(({}))", c.id)) {
+                                app.status = t!("tui.error.prefix", "msg" => e.to_string());
+                            } else {
+                                app.status = format!("Yanked (({}))", c.id);
+                            }
+                        }
+                        Err(e) => app.status = t!("tui.error.prefix", "msg" => e.to_string()),
+                    }
+                }
+                app.block_panel.pending = None;
+            } else {
+                app.block_panel.pending = Some('y');
+            }
+            true
+        }
+        KeyCode::Char('z') => {
+            app.block_panel.pending = Some('z');
+            true
+        }
+        KeyCode::Char('a') if app.block_panel.pending == Some('z') => {
+            if let Some(c) = current.as_ref() {
+                if let Err(e) = app
+                    .client
+                    .clone()
+                    .patch_block_collapse(c.id, !c.collapsed)
+                    .await
+                {
+                    app.status = t!("tui.error.prefix", "msg" => e);
+                } else {
+                    reload_block_panel(app, note_id, board_id).await;
+                }
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        KeyCode::Enter => {
+            // Defer to the event loop so we can leave the TUI cleanly.
+            if let Some(c) = current.as_ref() {
+                app.pending_block_edit = Some(c.id);
+            }
+            app.block_panel.pending = None;
+            true
+        }
+        _ => {
+            app.block_panel.pending = None;
+            false
+        }
+    }
+}
+
+async fn reload_block_panel(app: &mut App, note_id: Uuid, board_id: Uuid) {
+    match crate::tui::blocks::load(&app.client, note_id, board_id).await {
+        Ok((blocks, pts)) => {
+            app.block_panel.blocks = blocks;
+            app.block_panel.plaintexts = pts;
+        }
+        Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
     }
 }
 

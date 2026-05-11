@@ -95,6 +95,10 @@ pub struct App {
     pub loading_content: bool,
     pub should_quit: bool,
     pub pending_edit: Option<Uuid>,
+    /// When set, the event loop will leave the TUI, open `$EDITOR` on the
+    /// active block's plaintext, encrypt the result with the note DEK, and
+    /// PATCH `/blocks/:id` with the new content.
+    pub pending_block_edit: Option<Uuid>,
     pub shared_boards: Vec<SharedBoardSummary>,
     pub selected_shared_board: usize,
     pub shared_notes: Vec<SharedNoteSummary>,
@@ -129,6 +133,7 @@ impl App {
             loading_content: false,
             should_quit: false,
             pending_edit: None,
+            pending_block_edit: None,
             shared_boards: vec![],
             selected_shared_board: 0,
             shared_notes: vec![],

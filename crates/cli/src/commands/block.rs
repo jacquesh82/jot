@@ -236,7 +236,7 @@ fn walk(
 }
 
 /// Open $EDITOR (or $VISUAL, falling back to vi) on `initial` and return the trimmed result.
-fn edit_in_editor(initial: &str) -> Result<String, CliError> {
+pub fn edit_in_editor(initial: &str) -> Result<String, CliError> {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".to_string());

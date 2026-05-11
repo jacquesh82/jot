@@ -47,6 +47,27 @@ pub fn render(f: &mut Frame, area: Rect, panel: &crate::tui::app::BlockPanel) {
     f.render_widget(p, area);
 }
 
+/// Flatten blocks in the same depth-first order used by the renderer, so a
+/// linear cursor index in `BlockPanel` lines up with what the user sees.
+pub fn flatten_depth_first(blocks: &[Block]) -> Vec<&Block> {
+    let by_parent = group_by_parent(blocks);
+    let mut out: Vec<&Block> = Vec::new();
+    fn rec<'a>(
+        m: &HashMap<Option<Uuid>, Vec<&'a Block>>,
+        parent: Option<Uuid>,
+        out: &mut Vec<&'a Block>,
+    ) {
+        if let Some(kids) = m.get(&parent) {
+            for k in kids {
+                out.push(*k);
+                rec(m, Some(k.id), out);
+            }
+        }
+    }
+    rec(&by_parent, None, &mut out);
+    out
+}
+
 fn group_by_parent(blocks: &[Block]) -> HashMap<Option<Uuid>, Vec<&Block>> {
     let mut m: HashMap<Option<Uuid>, Vec<&Block>> = HashMap::new();
     for b in blocks {

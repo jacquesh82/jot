@@ -919,6 +919,55 @@ impl JotClient {
             .await
     }
 
+    /// Encrypt arbitrary plaintext with the note's DEK (mirror of `decrypt_with_note_dek`).
+    pub async fn encrypt_with_note_dek(
+        &self,
+        board_id: Uuid,
+        note_id: Uuid,
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, CliError> {
+        let (secret, _) = identity::load_or_generate()?;
+        let dek = self.derive_dek_for(&secret, board_id, note_id)?;
+        encrypt(&dek, plaintext)
+            .map_err(|e| CliError::Server(format!("block encryption failed: {e}")))
+    }
+
+    /// PATCH /blocks/:id with just `{ content_b64 }` — leaves type/metadata/collapsed alone.
+    pub async fn patch_block_content_b64(
+        &self,
+        id: Uuid,
+        content_b64: &str,
+    ) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .patch(format!("{}/blocks/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "content_b64": content_b64 }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    /// PATCH /blocks/:id with just `{ collapsed }` — for `za`-style fold toggles.
+    pub async fn patch_block_collapse(&self, id: Uuid, collapsed: bool) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .patch(format!("{}/blocks/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "collapsed": collapsed }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
     pub async fn block_backlinks(&self, id: Uuid) -> Result<serde_json::Value, CliError> {
         let auth = self.auth_header()?;
         let resp = self
