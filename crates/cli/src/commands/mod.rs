@@ -1,5 +1,6 @@
 pub mod account_delete;
 pub mod add;
+pub mod block;
 pub mod board_share;
 pub mod invite;
 pub mod link;

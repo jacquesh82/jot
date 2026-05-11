@@ -678,4 +678,226 @@ impl JotClient {
             .map(|s| s.to_string())
             .ok_or_else(|| CliError::Server("missing token in response".into()))
     }
+
+    // ---------- Block operations (Task 11) ----------
+
+    pub async fn list_blocks(&self, note_id: Uuid) -> Result<Vec<jot_core::models::Block>, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/notes/{}/blocks", self.base_url, note_id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        let dtos: Vec<BlockDto> = resp.json().await?;
+        dtos.into_iter().map(dto_to_block).collect()
+    }
+
+    pub async fn create_block(
+        &self,
+        note_id: Uuid,
+        parent: Option<Uuid>,
+        position: Option<f64>,
+        block_type: &str,
+        content: &[u8],
+        metadata: Option<&[u8]>,
+    ) -> Result<jot_core::models::Block, CliError> {
+        use base64::Engine;
+        let auth = self.auth_header()?;
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let body = serde_json::json!({
+            "parent_id": parent,
+            "position": position,
+            "block_type": block_type,
+            "content_b64": b64.encode(content),
+            "metadata_b64": metadata.map(|m| b64.encode(m)),
+        });
+        let resp = self
+            .inner
+            .post(format!("{}/notes/{}/blocks", self.base_url, note_id))
+            .header("Authorization", auth)
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        let dto: BlockDto = resp.json().await?;
+        dto_to_block(dto)
+    }
+
+    pub async fn get_block(&self, id: Uuid) -> Result<jot_core::models::Block, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/blocks/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        let dto: BlockDto = resp.json().await?;
+        dto_to_block(dto)
+    }
+
+    pub async fn patch_block(
+        &self,
+        id: Uuid,
+        block_type: Option<&str>,
+        content: Option<&[u8]>,
+    ) -> Result<jot_core::models::Block, CliError> {
+        use base64::Engine;
+        let auth = self.auth_header()?;
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let body = serde_json::json!({
+            "block_type": block_type,
+            "content_b64": content.map(|c| b64.encode(c)),
+        });
+        let resp = self
+            .inner
+            .patch(format!("{}/blocks/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        let dto: BlockDto = resp.json().await?;
+        dto_to_block(dto)
+    }
+
+    pub async fn move_block(
+        &self,
+        id: Uuid,
+        new_parent: Option<Uuid>,
+        new_position: f64,
+    ) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let body = serde_json::json!({
+            "new_parent_id": new_parent,
+            "new_position": new_position,
+        });
+        let resp = self
+            .inner
+            .post(format!("{}/blocks/{}/move", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn indent_block(&self, id: Uuid) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/blocks/{}/indent", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn outdent_block(&self, id: Uuid) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .post(format!("{}/blocks/{}/outdent", self.base_url, id))
+            .header("Authorization", auth)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn delete_block(&self, id: Uuid) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}/blocks/{}", self.base_url, id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(())
+    }
+
+    pub async fn block_backlinks(&self, id: Uuid) -> Result<serde_json::Value, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}/blocks/{}/backlinks", self.base_url, id))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.status().to_string()));
+        }
+        Ok(resp.json().await?)
+    }
+}
+
+// ---------- Block DTO helpers (Task 11) ----------
+
+#[derive(Debug, Clone, Deserialize)]
+struct BlockDto {
+    id: String,
+    note_id: String,
+    parent_block_id: Option<String>,
+    position: f64,
+    block_type: String,
+    content: String,
+    metadata: Option<String>,
+    collapsed: bool,
+    created_at: String,
+    updated_at: String,
+}
+
+fn b64decode(s: &str) -> Result<Vec<u8>, CliError> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .map_err(|e| CliError::Server(format!("invalid base64 in block: {e}")))
+}
+
+fn dto_to_block(d: BlockDto) -> Result<jot_core::models::Block, CliError> {
+    use chrono::{DateTime, Utc};
+    use jot_core::models::{Block, BlockType};
+    Ok(Block {
+        id: Uuid::parse_str(&d.id).map_err(|e| CliError::Server(format!("bad block id: {e}")))?,
+        note_id: Uuid::parse_str(&d.note_id)
+            .map_err(|e| CliError::Server(format!("bad note id: {e}")))?,
+        parent_block_id: d
+            .parent_block_id
+            .as_deref()
+            .and_then(|s| Uuid::parse_str(s).ok()),
+        position: d.position,
+        block_type: BlockType::from_str(&d.block_type),
+        content: b64decode(&d.content)?,
+        metadata: d.metadata.as_deref().map(b64decode).transpose()?,
+        collapsed: d.collapsed,
+        created_at: DateTime::parse_from_rfc3339(&d.created_at)
+            .map_err(|e| CliError::Server(format!("bad created_at: {e}")))?
+            .with_timezone(&Utc),
+        updated_at: DateTime::parse_from_rfc3339(&d.updated_at)
+            .map_err(|e| CliError::Server(format!("bad updated_at: {e}")))?
+            .with_timezone(&Utc),
+    })
 }

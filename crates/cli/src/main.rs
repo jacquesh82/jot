@@ -105,6 +105,11 @@ enum Command {
     },
     /// Apply pending database schema migrations
     Migrate,
+    /// Block-level operations
+    Block {
+        #[command(subcommand)]
+        cmd: commands::block::BlockCmd,
+    },
     /// Launch the TUI
     Tui,
     /// Permanently delete this account and all associated data
@@ -149,6 +154,7 @@ async fn main() -> Result<(), CliError> {
         Command::BoardShare { board, with } => commands::board_share::run_share(board, with).await,
         Command::BoardRevoke { board, identity } => commands::board_share::run_revoke(board, identity).await,
         Command::Migrate => commands::migrate::run().await,
+        Command::Block { cmd } => commands::block::run(cmd).await,
         Command::Tui => tui::run_tui().await,
         Command::DeleteAccount => commands::account_delete::run().await,
     }
