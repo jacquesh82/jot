@@ -79,7 +79,29 @@ export function BlockEditor({ noteId, boardId }: Props) {
 
   const renderNode = (n: BlockNode, depth = 0): JSX.Element => (
     <div class={`block-row ${active === n.id ? "active" : ""}`} style={{ paddingLeft: `${depth * 24}px` }} key={n.id}>
-      <span class="block-bullet" data-id={n.id}>•</span>
+      <span
+        class="block-bullet"
+        data-id={n.id}
+        draggable
+        onDragStart={(e) => {
+          (e as DragEvent).dataTransfer!.setData("text/block-id", n.id);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).classList.add("drop-target");
+        }}
+        onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+        onDrop={async (e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).classList.remove("drop-target");
+          const draggedId = (e as DragEvent).dataTransfer!.getData("text/block-id");
+          if (!draggedId || draggedId === n.id) return;
+          try {
+            await api.moveBlock(draggedId, n.parent_block_id, n.position + 0.5);
+            await refresh();
+          } catch (err) { console.warn("move failed", err); }
+        }}
+      >•</span>
       <div
         class="block-content"
         contentEditable
