@@ -1,64 +1,49 @@
 # Block Structure — Developer Guide
 
-Block-structured notes (Outliner / Logseq-style). For the full architecture and
-rationale, see the design spec:
+Block-structured notes (Outliner / Logseq-style). Architecture in
 [`docs/superpowers/specs/2026-05-11-block-structure-design.md`](superpowers/specs/2026-05-11-block-structure-design.md).
 
 ## Schema
 
 Migration: [`crates/storage/migrations/0008_blocks.sql`](../crates/storage/migrations/0008_blocks.sql).
 
-New tables:
-
 - **`blocks`** — `id`, `note_id`, `parent_block_id?`, `position` (float, fractional
-  reordering), `block_type` (`text|heading|todo|quote|code|embed|divider`),
-  `content` (encrypted BLOB), `metadata?`, `collapsed`, timestamps. FKs cascade
-  from `notes` and self-cascade from `parent_block_id`.
-- **`block_links`** — edges from a source block to a target. Columns:
-  `source_block_id`, `target_kind` (`note|block|tag`), `target_id`, `link_kind`
-  (`page_ref|block_ref|block_embed|tag`). `UNIQUE(source, target_kind, target_id, link_kind)`.
-- **`tags`** — `(name, identity_id)` primary key, optional `color`. FK on
-  `identity_id` cascades from `identities`.
+  reorder), `block_type` (`text|heading|todo|quote|code|embed|divider`),
+  `content` (encrypted BLOB), `metadata?`, `collapsed`, timestamps. Cascades from
+  `notes` and self.
+- **`block_links`** — `source_block_id`, `target_kind` (`note|block|tag`),
+  `target_id`, `link_kind` (`page_ref|block_ref|block_embed|tag`).
+  `UNIQUE(source, target_kind, target_id, link_kind)`.
+- **`tags`** — `(name, identity_id)` PK, optional `color`. Cascades from `identities`.
 
-New columns on `notes`:
-
-- `title BLOB` — encrypted title (separate from body).
-- `is_journal INTEGER` + `journal_date TEXT` — reserved for journal entries.
-- `schema_version INTEGER` — `0` = legacy text note, `1` = block-structured.
+New `notes` columns: `title BLOB` (encrypted), `is_journal` + `journal_date`
+(reserved), `schema_version` (`0` = legacy text, `1` = block-structured).
 
 ## API
 
-Browse the live spec at **`/swagger-ui`** (OpenAPI JSON at `/api-docs/openapi.json`).
+Live spec at **`/swagger-ui`** (JSON at `/api-docs/openapi.json`).
 Wired in [`crates/api/src/routes/mod.rs`](../crates/api/src/routes/mod.rs).
 
 Blocks CRUD:
-
-- `GET    /notes/:note_id/blocks` — flat list.
-- `POST   /notes/:note_id/blocks` — create.
-- `GET    /blocks/:id`            — fetch one.
-- `PATCH  /blocks/:id`            — update content/type/metadata/collapsed.
-- `DELETE /blocks/:id`            — cascade-deletes descendants.
+- `GET|POST /notes/:note_id/blocks` — list / create.
+- `GET|PATCH|DELETE /blocks/:id` — fetch / update / cascade-delete.
 
 Tree ops:
-
-- `POST   /blocks/:id/move`       — `{ to_parent?, position }`.
-- `POST   /blocks/:id/indent`     — slot under previous sibling.
-- `POST   /blocks/:id/outdent`    — move under grandparent.
+- `POST /blocks/:id/move` `{ to_parent?, position }`.
+- `POST /blocks/:id/indent` — slot under previous sibling.
+- `POST /blocks/:id/outdent` — move under grandparent.
 
 Links & tags:
-
-- `PUT    /blocks/:id/links`      — replace link edges for a block.
-- `GET    /blocks/:id/backlinks`  — blocks linking here.
-- `GET    /notes/:id/backlinks`   — blocks linking to any block in this note.
-- `GET    /tags`, `PUT /tags/:name`, `GET /tags/:name/blocks`.
+- `PUT /blocks/:id/links` — replace edges.
+- `GET /blocks/:id/backlinks`, `GET /notes/:id/backlinks`.
+- `GET /tags`, `PUT /tags/:name`, `GET /tags/:name/blocks`.
 
 Notes extensions:
+- `PATCH /notes/:id/title` — encrypted title.
+- `PATCH /notes/:id/schema-version` — flip 0 → 1 after migration.
+- `GET /notes/legacy-text` — list notes still on schema 0.
 
-- `PATCH  /notes/:id/title`            — encrypted title.
-- `PATCH  /notes/:id/schema-version`   — flip 0 → 1 after migration.
-- `GET    /notes/legacy-text`          — list notes still on schema 0.
-
-WebSocket events (see [`routes/ws.rs`](../crates/api/src/routes/ws.rs)):
+WebSocket ([`routes/ws.rs`](../crates/api/src/routes/ws.rs)):
 `block.created | block.updated | block.deleted | block.moved`.
 
 ## Link syntax
