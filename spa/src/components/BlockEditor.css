@@ -12,8 +12,10 @@
 }
 .block-title:focus { border-bottom: 1px solid var(--accent, #4af); }
 .block-empty { color: var(--muted, #888); padding: 8px; }
-.block-row { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
-.block-row.active > .block-content { background: rgba(255,255,255,0.04); }
+.block-row { display: block; }
+.block-line { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
+.block-children { display: block; }
+.block-row.active > .block-line > .block-content { background: rgba(255,255,255,0.04); }
 .block-bullet { color: var(--muted, #888); cursor: grab; user-select: none; padding-top: 4px; }
 .block-content { flex: 1; outline: none; padding: 2px 4px; border-radius: 4px; min-height: 1.4em; white-space: pre-wrap; }
 .block-content:focus { background: rgba(255,255,255,0.06); }
