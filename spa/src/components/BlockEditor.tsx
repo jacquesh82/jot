@@ -18,6 +18,8 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [slashFor, setSlashFor] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastClicked, setLastClicked] = useState<string | null>(null);
   // One stack per note open: switching notes resets undo history.
   const undoStack = useMemo(() => new UndoStack(), [noteId]);
 
@@ -125,6 +127,60 @@ export function BlockEditor({ noteId, boardId }: Props) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [undoStack]);
 
+  // Multi-selection keyboard handler. Fires only when ≥1 block is selected
+  // AND no contentEditable is focused (so single-block typing still works).
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inEditable = target?.closest(".block-content[contenteditable=\"true\"]") != null;
+      if (inEditable) return;
+      const ids = Array.from(selected);
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        withSaving(() => keymap.deleteMany(ctx(), ids));
+        setSelected(new Set());
+      } else if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        withSaving(() => keymap.indentMany(ctx(), ids));
+      } else if (e.key === "Tab" && e.shiftKey) {
+        e.preventDefault();
+        withSaving(() => keymap.outdentMany(ctx(), ids));
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setSelected(new Set());
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selected, flat]);
+
+  const onBulletClick = (e: MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (e.shiftKey && lastClicked) {
+      const flatIds = flat.map(b => b.id);
+      const a = flatIds.indexOf(lastClicked);
+      const b = flatIds.indexOf(id);
+      if (a < 0 || b < 0) { setSelected(new Set([id])); setLastClicked(id); return; }
+      const [from, to] = a <= b ? [a, b] : [b, a];
+      const next = new Set<string>(selected);
+      for (let i = from; i <= to; i++) next.add(flatIds[i]);
+      setSelected(next);
+    } else if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setSelected(next);
+      setLastClicked(id);
+    } else {
+      setSelected(new Set([id]));
+      setLastClicked(id);
+    }
+    (document.activeElement as HTMLElement | null)?.blur();
+  };
+
+  const clearSelection = () => { if (selected.size > 0) setSelected(new Set()); };
+
   const ctx = (): keymap.KeymapCtx => ({
     noteId, boardId,
     blocks: flat,
@@ -169,12 +225,16 @@ export function BlockEditor({ noteId, boardId }: Props) {
     s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!));
 
   const renderNode = (n: BlockNode, depth = 0): JSX.Element => (
-    <div class={`block-row ${active === n.id ? "active" : ""}`} key={n.id}>
+    <div
+      class={`block-row ${active === n.id ? "active" : ""} ${selected.has(n.id) ? "multi-selected" : ""}`}
+      key={n.id}
+    >
       <div class="block-line" style={{ paddingLeft: `${depth * 24}px` }}>
         <span
           class="block-bullet"
           data-id={n.id}
           draggable
+          onClick={(e) => onBulletClick(e as MouseEvent, n.id)}
           onDragStart={(e) => {
             (e as DragEvent).dataTransfer!.setData("text/block-id", n.id);
           }}
@@ -196,7 +256,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
         <div
           class="block-content"
           contentEditable
-          onFocus={() => setActive(n.id)}
+          onFocus={() => { setActive(n.id); clearSelection(); }}
           onBlur={(ev) => onBlur(n, (ev.target as HTMLElement).innerText)}
           onKeyDown={onKeyDown as any}
           dangerouslySetInnerHTML={{ __html: escapeHtml(n.plaintext) }}
@@ -225,7 +285,12 @@ export function BlockEditor({ noteId, boardId }: Props) {
           {saveState === "saving" ? t("block.saving") : saveState === "saved" ? t("block.saved") : t("block.autosave")}
         </span>
       </div>
-      {roots.length === 0 ? <p class="block-empty">{t("block.empty")}</p> : roots.map(r => renderNode(r))}
+      <div class="block-list" onClick={(e) => {
+        // Click in empty space (not on a block-row) clears multi-selection.
+        if ((e.target as HTMLElement).classList.contains("block-list")) clearSelection();
+      }}>
+        {roots.length === 0 ? <p class="block-empty">{t("block.empty")}</p> : roots.map(r => renderNode(r))}
+      </div>
       {slashFor && (
         <SlashMenu
           onClose={() => setSlashFor(null)}

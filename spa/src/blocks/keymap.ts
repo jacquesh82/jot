@@ -167,3 +167,120 @@ export async function moveBlockTo(
 
 // kept for type completeness
 export { siblingPosition };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-selection batch operations
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Remove from the id list any block whose ancestor is also present in the list. */
+function filterOutDescendants(blocks: BlockNode[], ids: string[]): string[] {
+  const set = new Set(ids);
+  const byId = new Map(blocks.map(b => [b.id, b]));
+  return ids.filter(id => {
+    let cur = byId.get(id);
+    while (cur?.parent_block_id) {
+      if (set.has(cur.parent_block_id)) return false;
+      cur = byId.get(cur.parent_block_id);
+    }
+    return true;
+  });
+}
+
+export async function deleteMany(ctx: KeymapCtx, ids: string[]) {
+  const dedup = filterOutDescendants(ctx.blocks, ids);
+  if (dedup.length === 0) return;
+  const byId = new Map(ctx.blocks.map(b => [b.id, b]));
+
+  // Snapshot pre-deletion state so undo can recreate the subtrees.
+  const snaps: { snap: ReturnType<typeof snapshotSubtree>; parent_id: string | null; position: number }[] = [];
+  for (const id of dedup) {
+    const node = byId.get(id);
+    if (!node) continue;
+    snaps.push({ snap: snapshotSubtree(node), parent_id: node.parent_block_id, position: node.position });
+  }
+
+  for (const id of dedup) {
+    try { await api.deleteBlock(id); } catch {}
+  }
+
+  const ref = { ids: [] as string[] };
+  ctx.undoStack.push({
+    label: `delete ${snaps.length} blocks`,
+    undo: async () => {
+      const newIds: string[] = [];
+      for (const s of snaps) {
+        const nid = await recreateSubtree(ctx.noteId, s.snap, s.parent_id, s.position);
+        newIds.push(nid);
+      }
+      ref.ids = newIds;
+      await ctx.refresh();
+    },
+    redo: async () => {
+      for (const id of ref.ids) {
+        try { await api.deleteBlock(id); } catch {}
+      }
+      await ctx.refresh();
+    },
+  });
+  await ctx.refresh();
+}
+
+export async function indentMany(ctx: KeymapCtx, ids: string[]) {
+  const byId = new Map(ctx.blocks.map(b => [b.id, b]));
+  const ops: { id: string; prevParent: string | null; prevPosition: number }[] = [];
+  for (const id of ids) {
+    const b = byId.get(id);
+    if (!b) continue;
+    if (!precedingSibling(ctx.blocks, b)) continue; // can't indent first child
+    ops.push({ id, prevParent: b.parent_block_id, prevPosition: b.position });
+    try { await api.indentBlock(id); } catch {}
+  }
+  if (ops.length === 0) return;
+  ctx.undoStack.push({
+    label: `indent ${ops.length} blocks`,
+    undo: async () => {
+      for (let i = ops.length - 1; i >= 0; i--) {
+        const o = ops[i];
+        try { await api.moveBlock(o.id, o.prevParent, o.prevPosition); } catch {}
+      }
+      await ctx.refresh();
+    },
+    redo: async () => {
+      for (const o of ops) {
+        try { await api.indentBlock(o.id); } catch {}
+      }
+      await ctx.refresh();
+    },
+  });
+  await ctx.refresh();
+}
+
+export async function outdentMany(ctx: KeymapCtx, ids: string[]) {
+  const byId = new Map(ctx.blocks.map(b => [b.id, b]));
+  const ops: { id: string; prevParent: string | null; prevPosition: number }[] = [];
+  for (const id of ids) {
+    const b = byId.get(id);
+    if (!b) continue;
+    if (!b.parent_block_id) continue; // already root
+    ops.push({ id, prevParent: b.parent_block_id, prevPosition: b.position });
+    try { await api.outdentBlock(id); } catch {}
+  }
+  if (ops.length === 0) return;
+  ctx.undoStack.push({
+    label: `outdent ${ops.length} blocks`,
+    undo: async () => {
+      for (let i = ops.length - 1; i >= 0; i--) {
+        const o = ops[i];
+        try { await api.moveBlock(o.id, o.prevParent, o.prevPosition); } catch {}
+      }
+      await ctx.refresh();
+    },
+    redo: async () => {
+      for (const o of ops) {
+        try { await api.outdentBlock(o.id); } catch {}
+      }
+      await ctx.refresh();
+    },
+  });
+  await ctx.refresh();
+}
