@@ -76,10 +76,11 @@ export function BlockEditor({ noteId, boardId }: Props) {
     try {
       if (title.trim() === "") {
         await api.patchNoteTitle(noteId, null);
-        return;
+      } else {
+        const ct = await encryptBlock(boardId, noteId, title);
+        await api.patchNoteTitle(noteId, ct);
       }
-      const ct = await encryptBlock(boardId, noteId, title);
-      await api.patchNoteTitle(noteId, ct);
+      window.dispatchEvent(new CustomEvent("note-title-changed", { detail: { noteId } }));
     } catch (e) { console.warn("save title failed", e); }
   };
 
