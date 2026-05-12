@@ -150,6 +150,9 @@ export const en: Record<string, string> = {
   // BlockEditor
   "block.empty": "Press Enter to create your first block.",
   "block.title_placeholder": "Untitled",
+  "block.autosave": "Autosave",
+  "block.saving": "Saving…",
+  "block.saved": "Saved",
   "block.type.text": "Text",
   "block.type.heading": "Heading",
   "block.type.todo": "Todo",

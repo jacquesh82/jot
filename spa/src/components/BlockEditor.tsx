@@ -15,10 +15,52 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [roots, setRoots] = useState<BlockNode[]>([]);
   const [flat, setFlat] = useState<BlockNode[]>([]);
   const [active, setActive] = useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const [slashFor, setSlashFor] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   // One stack per note open: switching notes resets undo history.
   const undoStack = useMemo(() => new UndoStack(), [noteId]);
+
+  // Wrap any async mutation so the badge reflects "saving…" → "saved".
+  const withSaving = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    setSaveState("saving");
+    try {
+      const r = await fn();
+      setSaveState("saved");
+      window.setTimeout(() => setSaveState(s => (s === "saved" ? "idle" : s)), 1200);
+      return r;
+    } catch (err) {
+      setSaveState("idle");
+      throw err;
+    }
+  };
+
+  // After a refresh, focus the block we asked to (e.g. just-created one).
+  const focusBlockInDom = (id: string) => {
+    const bullet = document.querySelector(`.block-bullet[data-id="${CSS.escape(id)}"]`);
+    const content = bullet?.parentElement?.querySelector(".block-content") as HTMLElement | null;
+    if (!content) return false;
+    content.focus();
+    const range = document.createRange();
+    range.selectNodeContents(content);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    return true;
+  };
+
+  useEffect(() => {
+    if (!pendingFocus) return;
+    // Try immediately, fall back to next tick if the DOM hasn't caught up.
+    if (focusBlockInDom(pendingFocus)) {
+      setPendingFocus(null);
+    } else {
+      const tid = window.setTimeout(() => { focusBlockInDom(pendingFocus); setPendingFocus(null); }, 0);
+      return () => window.clearTimeout(tid);
+    }
+  });
 
   useEffect(() => {
     (async () => {
@@ -93,7 +135,8 @@ export function BlockEditor({ noteId, boardId }: Props) {
     noteId, boardId,
     blocks: flat,
     activeIdx: Math.max(0, flat.findIndex(b => b.id === active)),
-    refresh, setActive,
+    refresh,
+    setActive: (id: string) => { setActive(id); setPendingFocus(id); },
     undoStack,
   });
 
@@ -106,23 +149,27 @@ export function BlockEditor({ noteId, boardId }: Props) {
       if (id) setSlashFor(id);
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await keymap.newBlockBelow(ctx()); }
-    else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); await keymap.indent(ctx()); }
-    else if (e.key === "Tab" &&  e.shiftKey) { e.preventDefault(); await keymap.outdent(ctx()); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await withSaving(() => keymap.newBlockBelow(ctx())); }
+    else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); await withSaving(() => keymap.indent(ctx())); }
+    else if (e.key === "Tab" &&  e.shiftKey) { e.preventDefault(); await withSaving(() => keymap.outdent(ctx())); }
     else if (e.key === "Backspace") {
       const cur = ctx().blocks[ctx().activeIdx];
       if (cur && (e.target as HTMLElement).innerText.trim() === "") {
-        e.preventDefault(); await keymap.deleteActive(ctx());
+        e.preventDefault(); await withSaving(() => keymap.deleteActive(ctx()));
       }
     }
   };
 
   const onBlur = async (b: BlockNode, text: string) => {
     if (text !== b.plaintext) {
-      await keymap.persistEdit(ctx(), b, text);
-      await refresh();
+      await withSaving(async () => {
+        await keymap.persistEdit(ctx(), b, text);
+        await refresh();
+      });
     }
   };
+
+  const saveTitleTracked = async () => withSaving(saveTitle);
 
   const escapeHtml = (s: string): string =>
     s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!));
@@ -148,7 +195,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
             const draggedId = (e as DragEvent).dataTransfer!.getData("text/block-id");
             if (!draggedId || draggedId === n.id) return;
             try {
-              await keymap.moveBlockTo(ctx(), draggedId, n.parent_block_id, n.position + 0.5);
+              await withSaving(() => keymap.moveBlockTo(ctx(), draggedId, n.parent_block_id, n.position + 0.5));
             } catch (err) { console.warn("move failed", err); }
           }}
         >•</span>
@@ -171,20 +218,25 @@ export function BlockEditor({ noteId, boardId }: Props) {
 
   return (
     <div class="block-editor">
-      <input
-        class="block-title"
-        type="text"
-        value={title}
-        onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-        onBlur={() => saveTitle()}
-        placeholder={t("block.title_placeholder")}
-      />
+      <div class="block-header">
+        <input
+          class="block-title"
+          type="text"
+          value={title}
+          onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+          onBlur={() => saveTitleTracked()}
+          placeholder={t("block.title_placeholder")}
+        />
+        <span class={`block-save-state save-${saveState}`} aria-live="polite">
+          {saveState === "saving" ? t("block.saving") : saveState === "saved" ? t("block.saved") : t("block.autosave")}
+        </span>
+      </div>
       {roots.length === 0 ? <p class="block-empty">{t("block.empty")}</p> : roots.map(r => renderNode(r))}
       {slashFor && (
         <SlashMenu
           onClose={() => setSlashFor(null)}
           onPick={async (id) => {
-            try { await keymap.changeType(ctx(), slashFor!, id); }
+            try { await withSaving(() => keymap.changeType(ctx(), slashFor!, id)); }
             catch (e) { console.warn("patch type failed", e); }
             setSlashFor(null);
           }}

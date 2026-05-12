@@ -1,4 +1,16 @@
 .block-editor { font-family: inherit; }
+.block-header { display: flex; align-items: center; gap: 12px; }
+.block-header > .block-title { flex: 1; }
+.block-save-state {
+  font-size: 0.78em;
+  color: var(--muted, #888);
+  white-space: nowrap;
+  transition: opacity 0.2s, color 0.2s;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.block-save-state.save-saving { color: var(--accent, #4af); }
+.block-save-state.save-saved  { color: #4caf50; }
 .block-title {
   width: 100%;
   background: transparent;
