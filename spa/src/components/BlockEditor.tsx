@@ -1,9 +1,10 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as api from "../api";
 import { buildTree, flatten, type BlockNode } from "../blocks/tree";
 import { decryptBlock, encryptBlock } from "../blocks/crypto";
 import * as keymap from "../blocks/keymap";
+import { UndoStack } from "../blocks/undo";
 import { t } from "../i18n";
 import { SlashMenu } from "./SlashMenu";
 import "./BlockEditor.css";
@@ -16,6 +17,8 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [active, setActive] = useState<string | null>(null);
   const [slashFor, setSlashFor] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  // One stack per note open: switching notes resets undo history.
+  const undoStack = useMemo(() => new UndoStack(), [noteId]);
 
   useEffect(() => {
     (async () => {
@@ -66,11 +69,32 @@ export function BlockEditor({ noteId, boardId }: Props) {
     return () => off();
   }, [noteId]);
 
+  // Global Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z handler at the editor level.
+  // Skips when a contentEditable block is focused so the browser's native
+  // intra-block text undo still works.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (!isMod) return;
+      const key = e.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      const target = e.target as HTMLElement | null;
+      const inEditable = target?.closest(".block-content[contenteditable=\"true\"]") != null;
+      if (inEditable) return; // let the browser handle inline text undo
+      e.preventDefault();
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
+      (isRedo ? undoStack.redo() : undoStack.undo()).catch(err => console.warn("undo/redo failed", err));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [undoStack]);
+
   const ctx = (): keymap.KeymapCtx => ({
     noteId, boardId,
     blocks: flat,
     activeIdx: Math.max(0, flat.findIndex(b => b.id === active)),
     refresh, setActive,
+    undoStack,
   });
 
   const onKeyDown = async (e: KeyboardEvent) => {
@@ -95,7 +119,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
 
   const onBlur = async (b: BlockNode, text: string) => {
     if (text !== b.plaintext) {
-      await keymap.persistEdit(boardId, noteId, b.id, text);
+      await keymap.persistEdit(ctx(), b, text);
       await refresh();
     }
   };
@@ -124,8 +148,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
             const draggedId = (e as DragEvent).dataTransfer!.getData("text/block-id");
             if (!draggedId || draggedId === n.id) return;
             try {
-              await api.moveBlock(draggedId, n.parent_block_id, n.position + 0.5);
-              await refresh();
+              await keymap.moveBlockTo(ctx(), draggedId, n.parent_block_id, n.position + 0.5);
             } catch (err) { console.warn("move failed", err); }
           }}
         >•</span>
@@ -161,10 +184,9 @@ export function BlockEditor({ noteId, boardId }: Props) {
         <SlashMenu
           onClose={() => setSlashFor(null)}
           onPick={async (id) => {
-            try { await api.patchBlock(slashFor!, { block_type: id }); }
+            try { await keymap.changeType(ctx(), slashFor!, id); }
             catch (e) { console.warn("patch type failed", e); }
             setSlashFor(null);
-            await refresh();
           }}
         />
       )}
