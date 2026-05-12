@@ -2,3 +2,25 @@
 .claude/
 PROJECT.MD
 website/node_modules/
+
+# Rust build artifacts
+target/
+**/target/
+
+# Local databases and other generated runtime files
+ruvector.db
+*.db-shm
+*.db-wal
+
+# Editor / OS junk
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Build outputs
+spa/dist/
+spa/node_modules/
+
+# Cache / state from auxiliary tools
+.claude-flow/

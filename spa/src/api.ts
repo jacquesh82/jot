@@ -27,8 +27,8 @@ async function authedFetch(input: string, init: RequestInit = {}): Promise<Respo
 }
 
 export interface Board { id: string; name: string; position: number }
-export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean }
-export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string }
+export interface Note  { id: string; note_type: string; position: number; shared?: boolean; snippet?: string; encrypted: boolean; schema_version?: number; title_b64?: string | null }
+export interface NoteMeta { id: string; board_id: string; note_type: string; blob_key: string; schema_version?: number; title_b64?: string | null }
 export interface DeviceSummary { id: string; name: string; last_seen: string }
 export type WsEvent = { event: string; [key: string]: unknown };
 
@@ -210,6 +210,14 @@ export async function updateNoteContent(id: string, text: string): Promise<void>
 
 export async function deleteNote(id: string): Promise<void> {
   const r = await authedFetch(`${BASE}/notes/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function patchNoteTitle(noteId: string, title_b64: string | null): Promise<void> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/title`, {
+    method: "PATCH",
+    body: JSON.stringify({ title_b64 }),
+  });
   if (!r.ok) throw new Error(await r.text());
 }
 
@@ -451,4 +459,118 @@ export function decodeJwt(t?: string): { sub: string; identity_id: string } | nu
     const payload = raw.split(".")[1];
     return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
   } catch { return null; }
+}
+
+// ─── Blocks ───────────────────────────────────────────────────────────────────
+
+export interface BlockDto {
+  id: string;
+  note_id: string;
+  parent_block_id: string | null;
+  position: number;
+  block_type: "text" | "heading" | "todo" | "quote" | "code" | "embed" | "divider";
+  content: string;            // base64 ciphertext
+  metadata: string | null;    // base64 ciphertext
+  collapsed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listBlocks(noteId: string): Promise<BlockDto[]> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/blocks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function createBlock(
+  noteId: string,
+  input: { parent_id?: string | null; position?: number; block_type: string; content_b64: string; metadata_b64?: string | null }
+): Promise<BlockDto> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/blocks`, { method: "POST", body: JSON.stringify(input) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function patchBlock(
+  id: string,
+  patch: { block_type?: string; content_b64?: string; metadata_b64?: string | null; collapsed?: boolean }
+): Promise<BlockDto> {
+  const r = await authedFetch(`${BASE}/blocks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function deleteBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function moveBlock(id: string, new_parent_id: string | null, new_position: number): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/move`, {
+    method: "POST", body: JSON.stringify({ new_parent_id, new_position }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function indentBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/indent`, { method: "POST", body: "{}" });
+  if (!r.ok) throw new Error(await r.text());
+}
+export async function outdentBlock(id: string): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/outdent`, { method: "POST", body: "{}" });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function putBlockLinks(
+  id: string,
+  links: { target_kind: string; target_id: string; link_kind: string }[]
+): Promise<void> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/links`, { method: "PUT", body: JSON.stringify({ links }) });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export interface BackLinkRow {
+  source_block_id: string;
+  source_note_id: string;
+  link_kind: string;
+}
+
+export async function blockBacklinks(id: string): Promise<BackLinkRow[]> {
+  const r = await authedFetch(`${BASE}/blocks/${id}/backlinks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function noteBacklinks(id: string): Promise<BackLinkRow[]> {
+  const r = await authedFetch(`${BASE}/notes/${id}/backlinks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export interface TagDto { name: string; color?: string | null }
+
+export async function listTags(): Promise<TagDto[]> {
+  const r = await authedFetch(`${BASE}/tags`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function putTag(name: string, color?: string | null): Promise<void> {
+  const r = await authedFetch(`${BASE}/tags/${encodeURIComponent(name)}`, {
+    method: "PUT", body: JSON.stringify({ color: color ?? null }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function blocksWithTag(name: string): Promise<string[]> {
+  const r = await authedFetch(`${BASE}/tags/${encodeURIComponent(name)}/blocks`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function setNoteSchemaVersion(noteId: string, schema_version: number): Promise<void> {
+  const r = await authedFetch(`${BASE}/notes/${noteId}/schema-version`, {
+    method: "PATCH", body: JSON.stringify({ schema_version }),
+  });
+  if (!r.ok) throw new Error(await r.text());
 }

@@ -27,6 +27,10 @@ fn note_from_row(row: &sqlx::sqlite::SqliteRow) -> Note {
     let created_str: String = row.get("created_at");
     let updated_str: String = row.get("updated_at");
     let nt_str: String = row.get("note_type");
+    let title: Option<Vec<u8>> = row.try_get("title").ok().flatten();
+    let is_journal: i64 = row.try_get("is_journal").unwrap_or(0);
+    let journal_date: Option<String> = row.try_get("journal_date").ok().flatten();
+    let schema_version: i64 = row.try_get("schema_version").unwrap_or(0);
     Note {
         id: Uuid::parse_str(&id_str).unwrap(),
         note_type: str_note_type(&nt_str),
@@ -44,14 +48,18 @@ fn note_from_row(row: &sqlx::sqlite::SqliteRow) -> Note {
         updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
             .unwrap()
             .with_timezone(&Utc),
+        title,
+        is_journal: is_journal != 0,
+        journal_date,
+        schema_version: schema_version as i32,
     }
 }
 
 impl Db {
     pub async fn insert_note(&self, note: &Note) -> Result<(), StorageError> {
         sqlx::query(
-            "INSERT INTO notes (id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO notes (id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at, title, is_journal, journal_date, schema_version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(note.id.to_string())
         .bind(note_type_str(&note.note_type))
@@ -65,6 +73,10 @@ impl Db {
         .bind(note.size)
         .bind(note.created_at.to_rfc3339())
         .bind(note.updated_at.to_rfc3339())
+        .bind(&note.title)
+        .bind(if note.is_journal { 1i64 } else { 0i64 })
+        .bind(&note.journal_date)
+        .bind(note.schema_version as i64)
         .execute(&self.0)
         .await?;
         Ok(())
@@ -72,7 +84,7 @@ impl Db {
 
     pub async fn get_note(&self, id: Uuid) -> Result<Option<Note>, StorageError> {
         let row = sqlx::query(
-            "SELECT id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at
+            "SELECT id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at, title, is_journal, journal_date, schema_version
              FROM notes WHERE id = ?"
         )
         .bind(id.to_string())
@@ -83,7 +95,7 @@ impl Db {
 
     pub async fn list_notes(&self, board_id: Uuid) -> Result<Vec<Note>, StorageError> {
         let rows = sqlx::query(
-            "SELECT id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at
+            "SELECT id, note_type, content, thumbnail, duration_ms, color, board_id, position, blob_key, size, created_at, updated_at, title, is_journal, journal_date, schema_version
              FROM notes WHERE board_id = ? ORDER BY position ASC"
         )
         .bind(board_id.to_string())
@@ -129,6 +141,71 @@ impl Db {
             .await?;
         Ok(())
     }
+
+    pub async fn update_note_title(
+        &self,
+        id: Uuid,
+        title: Option<&[u8]>,
+    ) -> Result<(), StorageError> {
+        sqlx::query("UPDATE notes SET title = ?, updated_at = ? WHERE id = ?")
+            .bind(title)
+            .bind(Utc::now().to_rfc3339())
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_legacy_text_notes_for_identity(
+        &self,
+        identity: Uuid,
+    ) -> Result<Vec<Uuid>, StorageError> {
+        let rows = sqlx::query(
+            "SELECT n.id FROM notes n JOIN boards b ON b.id = n.board_id
+             WHERE b.identity_id = ? AND n.note_type = 'text' AND n.schema_version = 0",
+        )
+        .bind(identity.to_string())
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows
+            .iter()
+            .filter_map(|r| {
+                let s: String = r.get("id");
+                Uuid::parse_str(&s).ok()
+            })
+            .collect())
+    }
+
+    pub async fn set_note_schema_version(
+        &self,
+        id: Uuid,
+        version: i32,
+    ) -> Result<(), StorageError> {
+        sqlx::query("UPDATE notes SET schema_version = ?, updated_at = ? WHERE id = ?")
+            .bind(version as i64)
+            .bind(Utc::now().to_rfc3339())
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn find_journal_note(
+        &self,
+        identity: Uuid,
+        date: &str,
+    ) -> Result<Option<Note>, StorageError> {
+        let row = sqlx::query(
+            "SELECT n.id, n.note_type, n.content, n.thumbnail, n.duration_ms, n.color, n.board_id, n.position, n.blob_key, n.size, n.created_at, n.updated_at, n.title, n.is_journal, n.journal_date, n.schema_version
+             FROM notes n JOIN boards b ON b.id = n.board_id
+             WHERE b.identity_id = ? AND n.journal_date = ? LIMIT 1",
+        )
+        .bind(identity.to_string())
+        .bind(date)
+        .fetch_optional(&self.0)
+        .await?;
+        Ok(row.map(|r| note_from_row(&r)))
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +228,10 @@ mod tests {
             size: 14,
             created_at: now,
             updated_at: now,
+            title: None,
+            is_journal: false,
+            journal_date: None,
+            schema_version: 0,
         }
     }
 

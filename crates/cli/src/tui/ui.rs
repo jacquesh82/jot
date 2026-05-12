@@ -177,6 +177,17 @@ fn render_notes(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_content(frame: &mut Frame, app: &App, area: Rect) {
+    // Gate: text notes with schema_version >= 1 render as a hierarchical block tree.
+    // Voice/image notes and legacy (schema_version 0) notes keep the flat paragraph view.
+    if matches!(app.view, View::MyBoards | View::SharedBoards) {
+        if let Some(note) = app.notes.get(app.selected_note) {
+            if note.note_type == "text" && note.schema_version >= 1 {
+                crate::tui::blocks::render(frame, area, &app.block_panel);
+                return;
+            }
+        }
+    }
+
     let title = if app.loading_content {
         t!("tui.title.contentLoading")
     } else {

@@ -1,6 +1,7 @@
 use crate::auth::middleware::AuthenticatedDevice;
 use crate::state::{AppState, WsEvent};
 use crate::ApiError;
+use base64::Engine;
 use storage::db::shares::permission_allows;
 use axum::{
     body::Bytes,
@@ -60,6 +61,11 @@ pub struct NoteMetadata {
     pub snippet: Option<String>,
     /// True when the note blob is E2E encrypted (a DEK exists for the caller)
     pub encrypted: bool,
+    /// Block schema version: 0 = legacy single blob, 1 = block-structured
+    pub schema_version: i32,
+    /// Encrypted note title (base64). None when no title is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_b64: Option<String>,
 }
 
 fn to_metadata(note: &Note) -> NoteMetadata {
@@ -86,6 +92,11 @@ fn to_metadata(note: &Note) -> NoteMetadata {
         shared: false,
         snippet,
         encrypted: false,
+        schema_version: note.schema_version,
+        title_b64: note
+            .title
+            .as_ref()
+            .map(|t| base64::engine::general_purpose::STANDARD.encode(t)),
     }
 }
 
@@ -190,6 +201,10 @@ pub async fn create_note(
         size: body.size,
         created_at: now,
         updated_at: now,
+        title: None,
+        is_journal: false,
+        journal_date: None,
+        schema_version: 0,
     };
     state.db.insert_note(&note).await?;
     let _ = state.ws_tx.send(WsEvent::NoteUpdated {
@@ -394,6 +409,77 @@ pub async fn put_blob(
     }
     state.blobs.put(&note.blob_key, &body).await?;
     Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PatchSchemaVersionBody {
+    pub schema_version: i32,
+}
+
+pub async fn patch_schema_version(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PatchSchemaVersionBody>,
+) -> Result<StatusCode, ApiError> {
+    let perm = state
+        .db
+        .note_permission_for(&id.to_string(), &auth.0.identity_id)
+        .await?;
+    if !permission_allows(&perm, "write") {
+        return Err(ApiError::Forbidden(
+            "no write permission on note".into(),
+        ));
+    }
+    state.db.set_note_schema_version(id, body.schema_version).await?;
+    let _ = state
+        .ws_tx
+        .send(WsEvent::NoteUpdated { id: id.to_string() });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_legacy_text_notes(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let identity = Uuid::parse_str(&auth.0.identity_id)
+        .map_err(|_| ApiError::BadRequest("bad identity id".into()))?;
+    let ids = state.db.list_legacy_text_notes_for_identity(identity).await?;
+    Ok(Json(ids.into_iter().map(|i| i.to_string()).collect()))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PatchTitleBody {
+    /// Base64-encoded encrypted title; `None` clears the title.
+    pub title_b64: Option<String>,
+}
+
+pub async fn patch_note_title(
+    State(state): State<AppState>,
+    auth: AuthenticatedDevice,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PatchTitleBody>,
+) -> Result<StatusCode, ApiError> {
+    let perm = state
+        .db
+        .note_permission_for(id.to_string().as_str(), &auth.0.identity_id)
+        .await?;
+    if !permission_allows(&perm, "write") {
+        return Err(ApiError::Forbidden("no write permission on note".into()));
+    }
+    let bytes = match body.title_b64 {
+        Some(s) => Some(
+            base64::engine::general_purpose::STANDARD
+                .decode(s)
+                .map_err(|_| ApiError::BadRequest("bad base64".into()))?,
+        ),
+        None => None,
+    };
+    state.db.update_note_title(id, bytes.as_deref()).await?;
+    let _ = state
+        .ws_tx
+        .send(WsEvent::NoteUpdated { id: id.to_string() });
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

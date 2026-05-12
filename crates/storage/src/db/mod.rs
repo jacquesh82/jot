@@ -1,3 +1,5 @@
+pub mod block_links;
+pub mod blocks;
 pub mod board_keys;
 pub mod board_shares;
 pub mod boards;
@@ -7,6 +9,7 @@ pub mod invites;
 pub mod links;
 pub mod notes;
 pub mod shares;
+pub mod tags;
 
 use crate::StorageError;
 use sqlx::{

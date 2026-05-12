@@ -146,4 +146,17 @@ export const en: Record<string, string> = {
   "shared.loading": "Loading…",
   "shared.noNotes": "No notes have been shared with you yet.",
   "shared.from": "from {owner}",
+
+  // BlockEditor
+  "block.empty": "Press Enter to create your first block.",
+  "block.title_placeholder": "Untitled",
+  "block.autosave": "Autosave",
+  "block.saving": "Saving…",
+  "block.saved": "Saved",
+  "block.type.text": "Text",
+  "block.type.heading": "Heading",
+  "block.type.todo": "Todo",
+  "block.type.quote": "Quote",
+  "block.type.code": "Code block",
+  "block.type.divider": "Divider",
 };

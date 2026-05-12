@@ -14,11 +14,13 @@ const MAX_WIDTH = 1200;
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
-  fetchNoteContent, updateNoteContent, deleteNote, encryptExistingNote,
-  fetchShares, shareNote, revokeShare,
+  fetchNoteContent, fetchNoteMeta, updateNoteContent, deleteNote, encryptExistingNote,
+  fetchShares, shareNote, revokeShare, setNoteSchemaVersion,
   type ShareEntry,
 } from "../api";
 import { selectedNoteId } from "../selectedNote";
+import { BlockEditor } from "./BlockEditor";
+import { migrateNoteToBlocks } from "../blocks/migrate";
 
 interface Props {
   onDeleted: (id: string) => void;
@@ -43,12 +45,16 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isEncrypted, setIsEncrypted] = useState(true);
   const [encrypting, setEncrypting] = useState(false);
+  const [boardId, setBoardId] = useState<string | null>(null);
+  const [schemaVersion, setSchemaVersion] = useState<number>(0);
+  const [noteType, setNoteType] = useState<string>("text");
   const [panelWidth, setPanelWidth] = useState(() => {
     const v = localStorage.getItem(PANEL_WIDTH_KEY);
     return v ? parseInt(v, 10) : DEFAULT_WIDTH;
   });
   const [resizing, setResizing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const migratedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!noteId) return;
@@ -67,10 +73,33 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
 
   async function load(id: string) {
     try {
+      let meta = await fetchNoteMeta(id);
+      setBoardId(meta.board_id);
+      setNoteType(meta.note_type);
       const { content: text, encrypted } = await fetchNoteContent(id);
       setContent(text);
       setDraft(text);
       setIsEncrypted(encrypted);
+
+      // Auto-migrate legacy text notes (schema_version=0) to block structure (v1).
+      // Skip if already migrated this session to avoid re-running on re-render.
+      const sv = meta.schema_version ?? 0;
+      if (meta.note_type === "text" && sv === 0 && !migratedRef.current.has(id)) {
+        migratedRef.current.add(id);
+        try {
+          if (text.trim()) {
+            await migrateNoteToBlocks(meta.board_id, id, text);
+          } else {
+            await setNoteSchemaVersion(id, 1);
+          }
+          meta = await fetchNoteMeta(id);
+        } catch (e) {
+          console.error("Block migration failed", e);
+          setSchemaVersion(sv);
+          return;
+        }
+      }
+      setSchemaVersion(meta.schema_version ?? 0);
     } catch (e) {
       setLoadError(String(e));
     }
@@ -335,7 +364,9 @@ export function NoteEditor({ onDeleted, onEncrypted }: Props) {
 
           {/* ── Body ── */}
           <div class="note-panel-body">
-            {mode === "raw" ? (
+            {noteType === "text" && schemaVersion >= 1 && boardId && noteId ? (
+              <BlockEditor noteId={noteId} boardId={boardId} />
+            ) : mode === "raw" ? (
               <textarea
                 ref={textareaRef}
                 class="note-panel-textarea"

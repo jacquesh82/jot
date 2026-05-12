@@ -17,3 +17,4 @@ sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 rand = "0.8"
+regex = "1.10"

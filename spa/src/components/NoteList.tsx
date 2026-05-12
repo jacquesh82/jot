@@ -11,12 +11,14 @@ import { notesView } from "../viewMode";
 import { selectedNoteId } from "../selectedNote";
 import { refreshSidebar } from "../sidebarRefresh";
 import { NoteEditor } from "./NoteEditor";
+import { decryptBlock } from "../blocks/crypto";
 import { t } from "../i18n";
 
 interface Props { boardId: string; readOnly?: boolean }
 
 export function NoteList({ boardId, readOnly = false }: Props) {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [titles, setTitles] = useState<Record<string, string>>({});
   const [newText, setNewText] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,16 +35,31 @@ export function NoteList({ boardId, readOnly = false }: Props) {
   useEffect(() => {
     load();
     stopWs.current = connectWs(onWs);
-    return () => stopWs.current?.();
+    const onTitleChanged = () => load();
+    window.addEventListener("note-title-changed", onTitleChanged);
+    return () => {
+      stopWs.current?.();
+      window.removeEventListener("note-title-changed", onTitleChanged);
+    };
   }, [boardId]);
 
   async function load() {
-    try { setNotes(await fetchNotes(boardId)); }
-    catch (e) { setError(String(e)); }
+    try {
+      const ns = await fetchNotes(boardId);
+      setNotes(ns);
+      const decoded: Record<string, string> = {};
+      await Promise.all(ns.map(async n => {
+        if (!n.title_b64) return;
+        try { decoded[n.id] = await decryptBlock(boardId, n.id, n.title_b64); }
+        catch { /* unreadable for this caller (e.g. legacy/shared) */ }
+      }));
+      setTitles(decoded);
+    } catch (e) { setError(String(e)); }
   }
 
   function onWs(e: WsEvent) {
-    if (e.event === "note_created" || e.event === "note_deleted") load();
+    // Reload on any note-level change so freshly-set titles surface here.
+    if (typeof e.event === "string" && e.event.startsWith("note_")) load();
   }
 
   async function handleAdd(e: Event) {
@@ -112,7 +129,12 @@ export function NoteList({ boardId, readOnly = false }: Props) {
   }
 
   const filtered = query.trim()
-    ? notes.filter((n) => n.id.includes(query) || (n.snippet ?? "").toLowerCase().includes(query.toLowerCase()))
+    ? notes.filter((n) => {
+        const q = query.toLowerCase();
+        return n.id.includes(query)
+          || (n.snippet ?? "").toLowerCase().includes(q)
+          || (titles[n.id] ?? "").toLowerCase().includes(q);
+      })
     : notes;
 
   const panelOpen = !!selectedNoteId.value;
@@ -213,7 +235,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
                   onClick={() => (selectedNoteId.value = note.id)} style={{ cursor: "pointer" }}>
                   <div class="item-row-header">
                     <span class="item-name">
-                      {note.snippet ?? <span style={{ fontFamily: "monospace", opacity: 0.5 }}>{note.id.slice(0, 8)}</span>}
+                      {titles[note.id] || note.snippet || <span style={{ fontFamily: "monospace", opacity: 0.5 }}>{note.id.slice(0, 8)}</span>}
                     </span>
                     <span class="lock-tip" data-tip={note.encrypted ? t("notelist.encrypted") : t("notelist.notEncrypted")}>
                       {note.encrypted
@@ -267,7 +289,7 @@ export function NoteList({ boardId, readOnly = false }: Props) {
                   </span>
                   {note.shared && <Users size={11} class="note-card-shared-badge" title={t("notelist.shared")} />}
                   <span class="note-card-snippet">
-                    {note.snippet ?? <span class="note-id">{note.id.slice(0, 8)}…</span>}
+                    {titles[note.id] || note.snippet || <span class="note-id">{note.id.slice(0, 8)}…</span>}
                   </span>
                   <span class="note-card-type">{note.note_type}</span>
                 </div>

@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod blocks;
 pub mod board_keys;
 pub mod board_shares;
 pub mod boards;
@@ -12,6 +13,7 @@ pub mod notes;
 pub mod register;
 pub mod shares;
 pub mod spa;
+pub mod tags;
 pub mod ws;
 
 use crate::openapi::ApiDoc;
@@ -49,13 +51,38 @@ pub fn build(state: AppState) -> Router {
         .route("/identity/lookup/:name", get(identity::lookup_by_name))
         .route("/notes", get(notes::list_notes).post(notes::create_note))
         .route("/notes/shared", get(shares::get_shared_with_me))
+        .route("/notes/legacy-text", get(notes::list_legacy_text_notes))
         .route(
             "/notes/:id",
             get(notes::get_note)
                 .delete(notes::delete_note)
                 .patch(notes::patch_note),
         )
+        .route(
+            "/notes/:id/schema-version",
+            patch(notes::patch_schema_version),
+        )
+        .route("/notes/:id/title", patch(notes::patch_note_title))
         .route("/notes/:id/blob", get(notes::get_blob).put(notes::put_blob))
+        .route(
+            "/notes/:note_id/blocks",
+            get(blocks::list_blocks).post(blocks::create_block),
+        )
+        .route(
+            "/blocks/:id",
+            get(blocks::get_block)
+                .patch(blocks::patch_block)
+                .delete(blocks::delete_block),
+        )
+        .route("/blocks/:id/move", post(blocks::move_block))
+        .route("/blocks/:id/indent", post(blocks::indent_block))
+        .route("/blocks/:id/outdent", post(blocks::outdent_block))
+        .route("/blocks/:id/backlinks", get(blocks::block_backlinks))
+        .route("/blocks/:id/links", put(blocks::put_block_links))
+        .route("/notes/:id/backlinks", get(blocks::note_backlinks))
+        .route("/tags", get(tags::list_tags))
+        .route("/tags/:name", put(tags::put_tag))
+        .route("/tags/:name/blocks", get(tags::blocks_with_tag))
         .route(
             "/notes/:id/shares",
             get(shares::list_shares).post(shares::share_note),

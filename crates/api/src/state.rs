@@ -9,6 +9,10 @@ pub enum WsEvent {
     NoteUpdated { id: String },
     NoteDeleted { id: String },
     BoardUpdated { id: String },
+    BlockCreated { note_id: String, block_id: String },
+    BlockUpdated { note_id: String, block_id: String },
+    BlockMoved { note_id: String, block_id: String },
+    BlockDeleted { note_id: String, block_id: String },
 }
 
 #[derive(Clone)]
