@@ -15,7 +15,6 @@ export function BlockEditor({ noteId, boardId }: Props) {
   const [roots, setRoots] = useState<BlockNode[]>([]);
   const [flat, setFlat] = useState<BlockNode[]>([]);
   const [active, setActive] = useState<string | null>(null);
-  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const [slashFor, setSlashFor] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -36,31 +35,26 @@ export function BlockEditor({ noteId, boardId }: Props) {
     }
   };
 
-  // After a refresh, focus the block we asked to (e.g. just-created one).
-  const focusBlockInDom = (id: string) => {
-    const bullet = document.querySelector(`.block-bullet[data-id="${CSS.escape(id)}"]`);
-    const content = bullet?.parentElement?.querySelector(".block-content") as HTMLElement | null;
-    if (!content) return false;
-    content.focus();
-    const range = document.createRange();
-    range.selectNodeContents(content);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    return true;
+  // Focus a block's contentEditable and place the caret at the end.
+  // Scheduled on rAF so it runs AFTER the next render (refresh() triggers
+  // a re-render that destroys the previously-focused node).
+  const focusBlock = (id: string, attempts = 3) => {
+    requestAnimationFrame(() => {
+      const bullet = document.querySelector(`.block-bullet[data-id="${CSS.escape(id)}"]`);
+      const content = bullet?.parentElement?.querySelector(".block-content") as HTMLElement | null;
+      if (!content) {
+        if (attempts > 0) focusBlock(id, attempts - 1);
+        return;
+      }
+      content.focus();
+      const range = document.createRange();
+      range.selectNodeContents(content);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    });
   };
-
-  useEffect(() => {
-    if (!pendingFocus) return;
-    // Try immediately, fall back to next tick if the DOM hasn't caught up.
-    if (focusBlockInDom(pendingFocus)) {
-      setPendingFocus(null);
-    } else {
-      const tid = window.setTimeout(() => { focusBlockInDom(pendingFocus); setPendingFocus(null); }, 0);
-      return () => window.clearTimeout(tid);
-    }
-  });
 
   useEffect(() => {
     (async () => {
@@ -136,7 +130,7 @@ export function BlockEditor({ noteId, boardId }: Props) {
     blocks: flat,
     activeIdx: Math.max(0, flat.findIndex(b => b.id === active)),
     refresh,
-    setActive: (id: string) => { setActive(id); setPendingFocus(id); },
+    setActive: (id: string) => { setActive(id); focusBlock(id); },
     undoStack,
   });
 

@@ -63,6 +63,7 @@ export async function indent(ctx: KeymapCtx) {
     redo: async () => { try { await api.indentBlock(cur.id); } catch {} await ctx.refresh(); },
   });
   await ctx.refresh();
+  ctx.setActive(cur.id);
 }
 
 export async function outdent(ctx: KeymapCtx) {
@@ -79,6 +80,7 @@ export async function outdent(ctx: KeymapCtx) {
     redo: async () => { try { await api.outdentBlock(cur.id); } catch {} await ctx.refresh(); },
   });
   await ctx.refresh();
+  ctx.setActive(cur.id);
 }
 
 export async function deleteActive(ctx: KeymapCtx) {
@@ -140,6 +142,7 @@ export async function changeType(ctx: KeymapCtx, blockId: string, newType: strin
     redo: async () => { await api.patchBlock(blockId, { block_type: newType }); await ctx.refresh(); },
   });
   await ctx.refresh();
+  ctx.setActive(blockId);
 }
 
 export async function moveBlockTo(
@@ -159,6 +162,7 @@ export async function moveBlockTo(
     redo: async () => { await api.moveBlock(blockId, newParent, newPosition); await ctx.refresh(); },
   });
   await ctx.refresh();
+  ctx.setActive(blockId);
 }
 
 // kept for type completeness
