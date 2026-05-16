@@ -4,6 +4,7 @@ mod config;
 mod error;
 mod i18n;
 mod identity;
+mod onboarding;
 mod tui;
 
 use clap::{Parser, Subcommand};
@@ -193,6 +194,21 @@ async fn main() -> Result<(), CliError> {
         })
         .unwrap_or_else(|| "en".to_string());
     crate::i18n::init(&lang);
+
+    // Mirror the SPA flow: if no token is stored, walk the user through
+    // create-or-link before running any command that requires auth.
+    let needs_auth = !matches!(
+        cli.command,
+        Command::Migrate
+            | Command::Serve { .. }
+            | Command::Link { .. }
+            | Command::LinkInit
+            | Command::LinkStatus { .. }
+    );
+    if needs_auth && config::Config::load().token.is_none() {
+        onboarding::ensure_authenticated().await?;
+    }
+
     match cli.command {
         Command::Add { text, board } => commands::add::run(text, board).await,
         Command::New { what } => commands::new::run(what).await,

@@ -611,6 +611,48 @@ impl JotClient {
         Ok(resp.json().await?)
     }
 
+    /// POST /register — create a fresh identity + device, returns (jwt, identity_id, device_id).
+    pub async fn register(
+        &self,
+        display_name: Option<&str>,
+        invite_token: Option<&str>,
+    ) -> Result<(String, String, String), CliError> {
+        let mut body = serde_json::Map::new();
+        if let Some(n) = display_name {
+            if !n.is_empty() {
+                body.insert("display_name".into(), serde_json::Value::String(n.to_string()));
+            }
+        }
+        if let Some(t) = invite_token {
+            if !t.is_empty() {
+                body.insert("invite_token".into(), serde_json::Value::String(t.to_string()));
+            }
+        }
+        let resp = self
+            .inner
+            .post(format!("{}/register", self.base_url))
+            .json(&serde_json::Value::Object(body))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let txt = resp.text().await.unwrap_or_default();
+            let reason = serde_json::from_str::<serde_json::Value>(&txt)
+                .ok()
+                .and_then(|v| v.get("error").and_then(|s| s.as_str()).map(str::to_owned))
+                .unwrap_or(txt);
+            return Err(CliError::Server(format!("{status}: {reason}")));
+        }
+        let v: serde_json::Value = resp.json().await?;
+        let jwt = v["jwt"].as_str().unwrap_or("").to_string();
+        let identity_id = v["identity_id"].as_str().unwrap_or("").to_string();
+        let device_id = v["device_id"].as_str().unwrap_or("").to_string();
+        if jwt.is_empty() {
+            return Err(CliError::Server("register: missing jwt".into()));
+        }
+        Ok((jwt, identity_id, device_id))
+    }
+
     pub async fn link_status(&self, token: &str) -> Result<(String, Option<String>), CliError> {
         let resp = self
             .inner
