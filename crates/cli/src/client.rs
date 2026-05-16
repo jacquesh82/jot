@@ -99,6 +99,97 @@ impl JotClient {
             .ok_or(CliError::NotAuthenticated)
     }
 
+    pub async fn get_json(&self, path: &str) -> Result<serde_json::Value, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .get(format!("{}{}", self.base_url, path))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn delete_path(&self, path: &str) -> Result<(), CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .delete(format!("{}{}", self.base_url, path))
+            .header("Authorization", auth)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(())
+    }
+
+    pub async fn patch_json(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .patch(format!("{}{}", self.base_url, path))
+            .header("Authorization", auth)
+            .json(body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        if resp.content_length() == Some(0) {
+            return Ok(serde_json::Value::Null);
+        }
+        resp.json().await.or(Ok(serde_json::Value::Null))
+    }
+
+    pub async fn put_json(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .inner
+            .put(format!("{}{}", self.base_url, path))
+            .header("Authorization", auth)
+            .json(body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        if resp.content_length() == Some(0) {
+            return Ok(serde_json::Value::Null);
+        }
+        resp.json().await.or(Ok(serde_json::Value::Null))
+    }
+
+    pub async fn post_json_optauth(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CliError> {
+        let mut req = self
+            .inner
+            .post(format!("{}{}", self.base_url, path))
+            .json(body);
+        if let Some(t) = &self.token {
+            req = req.header("Authorization", format!("Bearer {}", t));
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            return Err(CliError::Server(resp.text().await.unwrap_or_default()));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn create_board(&self, name: &str) -> Result<BoardSummary, CliError> {
         let auth = self.auth_header()?;
         let resp = self
@@ -975,6 +1066,47 @@ impl JotClient {
         if !resp.status().is_success() {
             return Err(CliError::Server(resp.text().await.unwrap_or_default()));
         }
+        Ok(())
+    }
+
+    /// Share a single block with another identity (re-encrypting its content for them).
+    pub async fn share_block(
+        &self,
+        block_id: Uuid,
+        target: &str,
+        permission: &str,
+    ) -> Result<(), CliError> {
+        use base64::Engine;
+        let target_info = self
+            .lookup_identity(target)
+            .await?
+            .ok_or_else(|| CliError::Server(format!("identity \"{target}\" not found")))?;
+        let pubkey_hex = target_info
+            .public_key_x25519
+            .ok_or_else(|| CliError::Server(format!("\"{target}\" has no public key registered")))?;
+
+        let block = self.get_block(block_id).await?;
+        let meta = self.get_note_meta(block.note_id).await?;
+        let plaintext = self
+            .decrypt_with_note_dek(meta.board_id, block.note_id, &block.content)
+            .await?;
+
+        let (secret, public) = identity::load_or_generate()?;
+        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+        let recipient_key = identity::cross_wrap_key(&secret, &pubkey_hex)?;
+        let ciphertext = encrypt(&recipient_key, &plaintext)
+            .map_err(|e| CliError::Server(format!("share encryption failed: {e}")))?;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&ciphertext);
+
+        self.post_json(
+            &format!("/blocks/{}/share", block_id),
+            &serde_json::json!({
+                "target": target,
+                "encrypted_content_b64": b64,
+                "permission": permission,
+            }),
+        )
+        .await?;
         Ok(())
     }
 

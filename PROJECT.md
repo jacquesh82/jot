@@ -92,6 +92,32 @@ Binaire `jot` :
 - `jot migrate` — commande standalone pour pré-migrer sans démarrer le serveur
 - `GET /health` inclut `schema_version`
 
+### Block structure (notes v1)
+- Schéma `blocks` (parent/position/type/contenu chiffré), migration lazy
+  `schema_version 0 → 1` côté SPA et via `jot block migrate`
+- API : `/notes/:id/blocks`, `/blocks/:id` (CRUD + move/indent/outdent),
+  `/blocks/:id/links`, `/(notes|blocks)/:id/backlinks`, `/tags`
+- SPA : éditeur block-tree, Intellisense (`[[ ]]`, `(( ))`, `#tag`),
+  pages Journal / Todo / Graph / About / BlocksPreview
+- Partage par bloc : `/blocks/:id/share[s]`, `/shared/blocks` (re-chiffrement
+  par destinataire via X25519 + AES-GCM)
+
+### Parité CLI ↔ SPA / API
+Toutes les routes API exposées par la SPA ont désormais un équivalent `jot`.
+Ajouts récents :
+- `jot board {rename, delete, move, reorder-notes}`
+- `jot device {rename, delete}`
+- `jot block {share, unshare, shares, shared}` (mêmes briques crypto que `share_note`)
+- `jot invites` / `jot invite-revoke <token>`
+- `jot link-init` / `jot link-status <token>`
+- `jot tag {list, blocks, set}`
+- `jot export [--out file]`, `jot contacts`, `jot backlinks --note|--block`
+- `jot whoami --set-name / --set-lang` (PATCH /identity/me)
+- Agrégations client-side : `jot journal [--date]`, `jot todo [--tag]`, `jot stats`
+
+TUI volontairement non porté pour ces fonctions de gestion (refonte event-loop
+intrusive — la CLI couvre la parité fonctionnelle).
+
 ---
 
 ## Roadmap — Ce qui reste à faire

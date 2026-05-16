@@ -46,13 +46,22 @@ enum Command {
         /// Link token shown in the browser
         token: String,
     },
+    /// Initiate a new device-link session and print token/code/URL
+    LinkInit,
+    /// Print the status of a link token (pending|confirmed|expired)
+    LinkStatus { token: String },
     /// Read the content of a note
     Read {
         /// Note ID
         id: uuid::Uuid,
     },
-    /// Show current identity and device
-    Whoami,
+    /// Show current identity and device (or update with --set-name/--set-lang)
+    Whoami {
+        #[arg(long, value_name = "NAME")]
+        set_name: Option<String>,
+        #[arg(long, value_name = "LANG")]
+        set_lang: Option<String>,
+    },
     /// Start the API server and register this device
     Serve {
         #[arg(long, default_value = "3000")]
@@ -67,6 +76,10 @@ enum Command {
         #[arg(long)]
         label: Option<String>,
     },
+    /// List all invites
+    Invites,
+    /// Revoke an invite by token
+    InviteRevoke { token: String },
     /// Share a note with another identity
     Share {
         /// Note ID
@@ -115,6 +128,49 @@ enum Command {
         #[command(subcommand)]
         cmd: commands::note::NoteCmd,
     },
+    /// Board-level operations (rename, delete, reorder)
+    Board {
+        #[command(subcommand)]
+        cmd: commands::board::BoardCmd,
+    },
+    /// Device-level operations (rename, delete)
+    Device {
+        #[command(subcommand)]
+        cmd: commands::device::DeviceCmd,
+    },
+    /// Tag-level operations (list, set, blocks)
+    Tag {
+        #[command(subcommand)]
+        cmd: commands::tag::TagCmd,
+    },
+    /// Export all your data as JSON
+    Export {
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    /// List recent contacts
+    Contacts,
+    /// Show backlinks for a note or block
+    Backlinks {
+        #[arg(long)]
+        note: Option<uuid::Uuid>,
+        #[arg(long)]
+        block: Option<uuid::Uuid>,
+    },
+    /// Show notes grouped by day (journal-style)
+    Journal {
+        /// Filter to one date (YYYY-MM-DD)
+        #[arg(long)]
+        date: Option<String>,
+    },
+    /// List all todo blocks across all notes
+    Todo {
+        /// Filter by tag (without #)
+        #[arg(long)]
+        tag: Option<String>,
+    },
+    /// Show counts of boards / notes (and per-board breakdown)
+    Stats,
     /// Launch the TUI
     Tui,
     /// Permanently delete this account and all associated data
@@ -146,13 +202,27 @@ async fn main() -> Result<(), CliError> {
             devices,
         } => commands::list::run(board, boards, devices).await,
         Command::Link { token } => commands::link::run(&token).await,
+        Command::LinkInit => {
+            commands::link::run_cmd(commands::link::LinkCmd::Init).await
+        }
+        Command::LinkStatus { token } => {
+            commands::link::run_cmd(commands::link::LinkCmd::Status { token }).await
+        }
         Command::Read { id } => commands::read::run(id).await,
-        Command::Whoami => commands::whoami::run().await,
+        Command::Whoami { set_name, set_lang } => commands::whoami::run(set_name, set_lang).await,
         Command::Serve {
             port,
             open_registration,
         } => commands::serve::run(port, open_registration).await,
-        Command::Invite { label } => commands::invite::run(label).await,
+        Command::Invite { label } => {
+            commands::invite::run(commands::invite::InviteCmd::Create { label }).await
+        }
+        Command::Invites => {
+            commands::invite::run(commands::invite::InviteCmd::List).await
+        }
+        Command::InviteRevoke { token } => {
+            commands::invite::run(commands::invite::InviteCmd::Revoke { token }).await
+        }
         Command::Share { note, with, permission } => commands::share::run_share(note, with, permission).await,
         Command::Revoke { note, identity } => commands::share::run_revoke(note, identity).await,
         Command::Shares { note } => commands::share::run_list(note).await,
@@ -161,6 +231,15 @@ async fn main() -> Result<(), CliError> {
         Command::Migrate => commands::migrate::run().await,
         Command::Block { cmd } => commands::block::run(cmd).await,
         Command::Note { cmd } => commands::note::run(cmd).await,
+        Command::Board { cmd } => commands::board::run(cmd).await,
+        Command::Device { cmd } => commands::device::run(cmd).await,
+        Command::Tag { cmd } => commands::tag::run(cmd).await,
+        Command::Export { out } => commands::export::run(out).await,
+        Command::Contacts => commands::contacts::run().await,
+        Command::Backlinks { note, block } => commands::backlinks::run(note, block).await,
+        Command::Journal { date } => commands::journal::run(date).await,
+        Command::Todo { tag } => commands::todo::run(tag).await,
+        Command::Stats => commands::stats::run().await,
         Command::Tui => tui::run_tui().await,
         Command::DeleteAccount => commands::account_delete::run().await,
     }

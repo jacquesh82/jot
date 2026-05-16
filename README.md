@@ -192,29 +192,112 @@ The SPA is served directly by `jot serve` on the same port as the API.
 No separate web server needed.
 
 **Features:**
-- Board and note management (list view + card view)
+- Board and note management (list view + card view) with block-tree editor
 - Real-time updates via WebSocket
 - Resizable note editor panel (persisted in localStorage)
-- Board and note sharing with friendly-name resolution
+- Board, note and per-block sharing with friendly-name resolution
 - Recent contacts shown as quick-pick chips when sharing
-- Dark / light theme toggle
-- Profile page: set/generate friendly name, link devices, manage invite tokens
+- Dark / light theme toggle, language selector (en / fr / es / de)
+- Journal page — notes grouped by day
+- Todo page — all `todo` blocks across notes, with tag filter
+- Knowledge graph (force-directed, links + backlinks)
+- Intellisense in editor : `[[note]]`, `((block))`, `#tag` autocompletion
+- Profile / devices pages : set/generate friendly name, link new devices, manage invites
 - Data export to JSON (plain or AES-256-GCM encrypted with PBKDF2)
 
+## TUI
+
+`jot tui` opens a Ratatui interface with keyboard navigation:
+
+- **Views** : `Tab` cycles MyBoards → SharedBoards → SharedNotes
+- **Boards** : `n` new, `r` rename, `D` delete, `↑/↓` navigate
+- **Notes** : `n` new note (input), `e` open `$EDITOR` on selected block, `d` delete
+- **Blocks (v1 notes)** : `j/k` navigate, `e` edit content, `o/O` add below/above,
+  `>` indent, `<` outdent, `dd` delete
+- **Devices view** : `r` rename, `d` delete
+- **Modes** : `Esc` cancels input/confirm
+
+The TUI covers navigation and editing. Sharing, invites, tags, link-init and
+aggregations (Journal / Todo / Graph) are CLI- or SPA-only.
+
 ## CLI commands
+
+### Server & maintenance
 
 | Command | Description |
 |---|---|
 | `jot serve [--port N] [--open-registration]` | Start the API server |
-| `jot add [text…]` | Add a note (args, stdin pipe, or `$EDITOR`) |
-| `jot list [--boards] [--devices]` | List notes, boards, or devices |
-| `jot new board <name>` | Create a new board |
-| `jot read <id>` | Read a note's content |
-| `jot link <token>` | Approve a device link from the terminal |
-| `jot whoami` | Show current identity and device |
-| `jot invite [--label L]` | Generate an invite token |
 | `jot migrate` | Apply pending DB migrations without starting the server |
 | `jot tui` | Launch the interactive TUI |
+| `jot export [--out file]` | Export all your data as JSON |
+| `jot stats` | Counts of boards / notes (per-board breakdown) |
+
+### Notes & blocks
+
+| Command | Description |
+|---|---|
+| `jot add [text…] [--board ID]` | Add a note (args, stdin pipe, or `$EDITOR`) |
+| `jot list [--boards] [--devices]` | List notes, boards, or devices |
+| `jot read <id>` | Read a note's content |
+| `jot note title <id> <text>` | Set or clear a note's title |
+| `jot block <add\|list\|show\|edit\|move\|indent\|outdent\|delete\|ref>` | Block-tree operations |
+| `jot block backlinks <id>` | List backlinks pointing at a block |
+| `jot block migrate [--all\|--note ID] [--dry-run]` | Migrate legacy notes to block form |
+| `jot backlinks --note ID \| --block ID` | Show backlinks for a note or block |
+| `jot journal [--date YYYY-MM-DD]` | Notes grouped by day |
+| `jot todo [--tag T]` | All todo blocks across notes |
+
+### Boards & devices
+
+| Command | Description |
+|---|---|
+| `jot new board <name>` | Create a new board |
+| `jot board rename <id> <name>` | Rename a board |
+| `jot board delete <id>` | Delete a board |
+| `jot board move <id> --position N` | Reposition a board in the sidebar |
+| `jot board reorder-notes <board> <uuid:pos>...` | Reorder notes inside a board |
+| `jot device rename <id> <name>` | Rename a device |
+| `jot device delete <id>` | Revoke a device |
+
+### Sharing
+
+| Command | Description |
+|---|---|
+| `jot share <note> <with> [--permission read\|write\|delete]` | Share a note |
+| `jot revoke <note> <identity>` | Revoke a note share |
+| `jot shares <note>` | List who a note is shared with |
+| `jot board-share <board> <with>` | Share a board (propagates note DEKs) |
+| `jot board-revoke <board> <identity>` | Revoke a board share |
+| `jot block share <id> <with> [--permission read\|write]` | Share a single block |
+| `jot block unshare <id> <identity>` | Revoke a block share |
+| `jot block shares <id>` / `jot block shared` | List block shares (out / in) |
+
+### Identity, invites & linking
+
+| Command | Description |
+|---|---|
+| `jot whoami [--set-name N] [--set-lang L]` | Show or update identity |
+| `jot contacts` | List recent contacts |
+| `jot link <token>` | Approve a pending device link (poll until done) |
+| `jot link-init` | Start a new link session, print token/code/URL |
+| `jot link-status <token>` | Print a link token's status |
+| `jot invite [--label L]` | Create an invite token |
+| `jot invites` | List all invites |
+| `jot invite-revoke <token>` | Revoke an invite |
+
+### Tags
+
+| Command | Description |
+|---|---|
+| `jot tag list` | List all tags |
+| `jot tag blocks <name>` | List block ids carrying a tag |
+| `jot tag set <name> --json '{"color":"#abc"}'` | Create / update tag metadata |
+
+### Account
+
+| Command | Description |
+|---|---|
+| `jot delete-account` | Permanently delete this account and all data |
 
 ## Schema versioning
 

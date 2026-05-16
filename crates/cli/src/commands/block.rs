@@ -48,6 +48,19 @@ pub enum BlockCmd {
     Ref { id: Uuid },
     /// List backlinks pointing at this block
     Backlinks { id: Uuid },
+    /// Share a single block with another identity
+    Share {
+        id: Uuid,
+        with: String,
+        #[arg(long, default_value = "read")]
+        permission: String,
+    },
+    /// Revoke a block share
+    Unshare { id: Uuid, identity: String },
+    /// List who a block is shared with
+    Shares { id: Uuid },
+    /// List blocks shared with me
+    Shared,
     /// Migrate legacy notes into block-structured form (Task 14)
     Migrate {
         #[arg(long)]
@@ -118,6 +131,49 @@ pub async fn run(cmd: BlockCmd) -> Result<(), CliError> {
                 serde_json::to_string_pretty(&body)
                     .unwrap_or_else(|_| body.to_string())
             );
+        }
+        BlockCmd::Share { id, with, permission } => {
+            if !matches!(permission.as_str(), "read" | "write") {
+                return Err(CliError::Config("permission must be read|write".into()));
+            }
+            client.share_block(id, &with, &permission).await?;
+            println!("block shared");
+        }
+        BlockCmd::Unshare { id, identity } => {
+            client
+                .delete_path(&format!("/blocks/{}/shares/{}", id, identity))
+                .await?;
+            println!("block unshared");
+        }
+        BlockCmd::Shares { id } => {
+            let body = client.get_json(&format!("/blocks/{}/shares", id)).await?;
+            if let Some(arr) = body.as_array() {
+                if arr.is_empty() {
+                    println!("(no shares)");
+                }
+                for s in arr {
+                    let name = s["shared_with_name"].as_str().unwrap_or("");
+                    let sid = s["shared_with_id"].as_str().unwrap_or("");
+                    let perm = s["permission"].as_str().unwrap_or("read");
+                    println!("  {name} ({}) [{perm}]", &sid[..sid.len().min(8)]);
+                }
+            } else {
+                println!("{}", serde_json::to_string_pretty(&body).unwrap_or_default());
+            }
+        }
+        BlockCmd::Shared => {
+            let body = client.get_json("/shared/blocks").await?;
+            if let Some(arr) = body.as_array() {
+                if arr.is_empty() {
+                    println!("(no blocks shared with you)");
+                }
+                for s in arr {
+                    let bid = s["block_id"].as_str().unwrap_or("");
+                    let owner = s["owner_friendly_name"].as_str().unwrap_or("");
+                    let perm = s["permission"].as_str().unwrap_or("read");
+                    println!("  {bid}  from {owner}  [{perm}]");
+                }
+            }
         }
         BlockCmd::Migrate { all, note, dry_run } => {
             migrate(&client, all, note, dry_run).await?;

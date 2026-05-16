@@ -38,6 +38,13 @@ Links & tags:
 - `GET /blocks/:id/backlinks`, `GET /notes/:id/backlinks`.
 - `GET /tags`, `PUT /tags/:name`, `GET /tags/:name/blocks`.
 
+Per-block sharing:
+- `POST /blocks/:id/share` `{ target, encrypted_content_b64, permission }` —
+  recipient-side ciphertext (X25519 cross-wrap + AES-GCM, same pattern as `share_note`).
+- `GET /blocks/:id/shares`, `DELETE /blocks/:id/shares/:target_id`.
+- `GET /shared/blocks` — blocks shared with me.
+- CLI : `jot block share|unshare|shares|shared`.
+
 Notes extensions:
 - `PATCH /notes/:id/title` — encrypted title.
 - `PATCH /notes/:id/schema-version` — flip 0 → 1 after migration.
