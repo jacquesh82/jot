@@ -149,8 +149,19 @@ Le design est documenté dans `docs/sharing-crypto-design.md`.
 
 ### Priorité basse
 
-**Mobile**
-- Flutter Android + FFI Rust (mentionné dans le README, rien de codé)
+**Mobile — Android (en cours)**
+- Squelette Flutter posé sous `mobile/` : router, state (riverpod), thème,
+  modèles, client API complet (toutes les routes), client WebSocket,
+  secure storage (Android Keystore).
+- Crate `crates/mobile-ffi` (cdylib) qui ré-expose la crypto de `jot-core`
+  via une ABI C stable (X25519, HKDF-SHA256, AES-256-GCM, extraction de liens
+  markdown). Bindings `dart:ffi` côté Flutter dans `lib/services/ffi/`.
+- Crypto Dart de secours via `package:cryptography` pour les builds sans NDK.
+- Écrans implémentés : connexion serveur, onboarding (création identité ou
+  linking), scan QR, boards (CRUD), notes (liste + ajout rapide + lecture E2E),
+  devices (liste + suppression), profil + logout, settings.
+- À faire : éditeur de blocs interactif, partage UI, export UI, abonnement WS
+  dans les écrans, notes voice / image.
 
 **Pro AI**
 - LanceDB embeddings (`--features pro-ai`)

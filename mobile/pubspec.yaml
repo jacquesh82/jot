@@ -1,0 +1,65 @@
+name: jot_mobile
+description: jot — chiffré, anonyme, partout (Android).
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # HTTP / WS
+  dio: ^5.7.0
+  web_socket_channel: ^3.0.1
+
+  # State
+  flutter_riverpod: ^2.5.1
+
+  # Routing
+  go_router: ^14.6.1
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  sqflite: ^2.4.0
+
+  # QR scanning / generation
+  mobile_scanner: ^5.2.3
+  qr_flutter: ^4.1.0
+
+  # Crypto — pure Dart fallback while the FFI lib is being wired up.
+  # The Rust FFI path lives in `lib/services/ffi/` and takes over once
+  # `libjot_mobile_ffi.so` is bundled into the APK.
+  cryptography: ^2.7.0
+
+  # Misc
+  intl: ^0.19.0
+  uuid: ^4.5.1
+  url_launcher: ^6.3.1
+  ffi: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  ffigen: ^15.0.0
+
+flutter:
+  uses-material-design: true
+
+ffigen:
+  name: JotBindings
+  description: Raw dart:ffi bindings to libjot_mobile_ffi (Rust).
+  output: lib/services/ffi/bindings_generated.dart
+  headers:
+    entry-points:
+      - rust/jot_mobile_ffi.h
+  preamble: |
+    // Generated from the Rust mobile-ffi crate. Do not edit by hand.
+    // Re-run `dart run ffigen --config pubspec.yaml` after updating the C header.
