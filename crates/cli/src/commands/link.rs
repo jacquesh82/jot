@@ -1,9 +1,9 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use crate::client::JotClient;
 use crate::config::Config;
 use crate::error::CliError;
 use crate::identity;
 use crate::t;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use clap::Subcommand;
 use std::time::{Duration, Instant};
 
@@ -33,7 +33,9 @@ pub async fn run_cmd(cmd: LinkCmd) -> Result<(), CliError> {
 async fn init() -> Result<(), CliError> {
     let cfg = Config::load();
     let client = JotClient::new(&cfg);
-    let resp = client.post_json_optauth("/link/init", &serde_json::json!({})).await?;
+    let resp = client
+        .post_json_optauth("/link/init", &serde_json::json!({}))
+        .await?;
     let token = resp["token"].as_str().unwrap_or("");
     let code = resp["code"].as_str().unwrap_or("");
     let expires = resp["expires_at"].as_str().unwrap_or("");

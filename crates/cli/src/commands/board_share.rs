@@ -9,17 +9,18 @@ pub async fn run_share(board_id: Uuid, target: String) -> Result<(), CliError> {
     let client = JotClient::from_config();
 
     // Resolve recipient + ensure they have a public key.
-    let target_info = client
-        .lookup_identity(&target)
-        .await?
-        .ok_or_else(|| CliError::Server(t!("cmd.boardShare.identityNotFound", "target" => target)))?;
+    let target_info = client.lookup_identity(&target).await?.ok_or_else(|| {
+        CliError::Server(t!("cmd.boardShare.identityNotFound", "target" => target))
+    })?;
     let recipient_pubkey_hex = target_info
         .public_key_x25519
         .ok_or_else(|| CliError::Server(t!("cmd.boardShare.noPubkey", "target" => target)))?;
 
     // Load our key pair and register our public key.
     let (secret, public) = identity::load_or_generate()?;
-    client.register_pubkey(&hex::encode(public.as_bytes())).await?;
+    client
+        .register_pubkey(&hex::encode(public.as_bytes()))
+        .await?;
 
     // Derive BEK from our identity key + board_id.
     let privkey = secret.to_bytes();
@@ -39,7 +40,10 @@ pub async fn run_share(board_id: Uuid, target: String) -> Result<(), CliError> {
         .put_board_key(board_id, &target_info.id, &hex::encode(&encrypted_bek))
         .await?;
 
-    println!("{}", t!("cmd.boardShare.shared", "id" => board_id, "target" => target));
+    println!(
+        "{}",
+        t!("cmd.boardShare.shared", "id" => board_id, "target" => target)
+    );
     Ok(())
 }
 
@@ -49,6 +53,9 @@ pub async fn run_revoke(board_id: Uuid, identity_id: String) -> Result<(), CliEr
     client.revoke_board_share(board_id, &identity_id).await?;
     // Delete the BEK so the ex-member can no longer derive any note DEKs.
     client.delete_board_key(board_id, &identity_id).await?;
-    println!("{}", t!("cmd.boardShare.revoked", "id" => board_id, "target" => identity_id));
+    println!(
+        "{}",
+        t!("cmd.boardShare.revoked", "id" => board_id, "target" => identity_id)
+    );
     Ok(())
 }

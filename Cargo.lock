@@ -2596,6 +2596,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "jot-mobile-ffi"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "jot-core",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+ "x25519-dalek",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"

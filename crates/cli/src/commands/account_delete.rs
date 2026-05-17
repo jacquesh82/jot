@@ -9,7 +9,9 @@ pub async fn run() -> Result<(), CliError> {
     io::stderr().flush().ok();
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| CliError::Config(e.to_string()))?;
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| CliError::Config(e.to_string()))?;
 
     if input.trim() != "delete" {
         eprintln!("{}", t!("cmd.delete.aborted"));

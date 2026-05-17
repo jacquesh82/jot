@@ -47,13 +47,11 @@ impl Db {
         board_id: &str,
         identity_id: &str,
     ) -> Result<bool, StorageError> {
-        let row = sqlx::query(
-            "SELECT 1 FROM board_keys WHERE board_id = ? AND identity_id = ?",
-        )
-        .bind(board_id)
-        .bind(identity_id)
-        .fetch_optional(&self.0)
-        .await?;
+        let row = sqlx::query("SELECT 1 FROM board_keys WHERE board_id = ? AND identity_id = ?")
+            .bind(board_id)
+            .bind(identity_id)
+            .fetch_optional(&self.0)
+            .await?;
         Ok(row.is_some())
     }
 

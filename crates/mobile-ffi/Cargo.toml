@@ -1,0 +1,23 @@
+[package]
+name = "jot-mobile-ffi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "jot_mobile_ffi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+jot-core = { path = "../core" }
+uuid = { version = "1", features = ["v4"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+
+# flutter_rust_bridge is added as a thin wrapper. The mobile-ffi crate exposes
+# stable C-ABI symbols that the Dart side calls; in this initial scaffold we
+# rely on plain C ABI (`extern "C"`) which is what flutter_rust_bridge generates
+# under the hood. A `bridge.dart` describing the same surface lives under
+# `mobile/lib/services/ffi/`.

@@ -241,7 +241,8 @@ impl JotClient {
         let (secret, public) = identity::load_or_generate()?;
 
         // Register our public key (idempotent — needed for board sharing).
-        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+        self.register_pubkey(&hex::encode(public.as_bytes()))
+            .await?;
 
         // Create note record first to obtain the note_id (needed for DEK derivation).
         let blob_key = Uuid::new_v4().to_string();
@@ -330,8 +331,8 @@ impl JotClient {
         let ciphertext = resp.bytes().await?.to_vec();
 
         let dek = self.derive_dek_local(note_id, meta.board_id).await?;
-        let plaintext = decrypt(&dek, &ciphertext)
-            .map_err(|_| CliError::Server("decryption failed".into()))?;
+        let plaintext =
+            decrypt(&dek, &ciphertext).map_err(|_| CliError::Server("decryption failed".into()))?;
         String::from_utf8(plaintext)
             .map_err(|_| CliError::Server("note content is not valid UTF-8".into()))
     }
@@ -386,9 +387,11 @@ impl JotClient {
         Ok(())
     }
 
-
     /// Look up an identity by friendly name or UUID.
-    pub async fn lookup_identity(&self, name_or_id: &str) -> Result<Option<IdentityInfo>, CliError> {
+    pub async fn lookup_identity(
+        &self,
+        name_or_id: &str,
+    ) -> Result<Option<IdentityInfo>, CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner
@@ -396,7 +399,9 @@ impl JotClient {
             .header("Authorization", auth)
             .send()
             .await?;
-        if resp.status().as_u16() == 404 { return Ok(None); }
+        if resp.status().as_u16() == 404 {
+            return Ok(None);
+        }
         if !resp.status().is_success() {
             return Err(CliError::Server(resp.status().to_string()));
         }
@@ -418,16 +423,27 @@ impl JotClient {
     }
 
     /// Share a note with a recipient. Derives the DEK locally and re-encrypts for them.
-    pub async fn share_note(&self, note_id: Uuid, target: &str, permission: &str) -> Result<(), CliError> {
-        let target_info = self.lookup_identity(target).await?
+    pub async fn share_note(
+        &self,
+        note_id: Uuid,
+        target: &str,
+        permission: &str,
+    ) -> Result<(), CliError> {
+        let target_info = self
+            .lookup_identity(target)
+            .await?
             .ok_or_else(|| CliError::Server(format!("identity \"{target}\" not found")))?;
-        let pubkey_hex = target_info.public_key_x25519
-            .ok_or_else(|| CliError::Server(format!("\"{target}\" has no public key registered — they must create a note first")))?;
+        let pubkey_hex = target_info.public_key_x25519.ok_or_else(|| {
+            CliError::Server(format!(
+                "\"{target}\" has no public key registered — they must create a note first"
+            ))
+        })?;
 
         let (secret, public) = identity::load_or_generate()?;
 
         // Register our public key so the recipient can derive the ECDH wrap key.
-        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+        self.register_pubkey(&hex::encode(public.as_bytes()))
+            .await?;
 
         // Derive DEK locally (no server round-trip needed for owner).
         let meta = self.get_note_meta(note_id).await?;
@@ -459,10 +475,15 @@ impl JotClient {
     /// With deterministic BEK→DEK derivation the owner's DEK never changes.
     pub async fn revoke_share(&self, note_id: Uuid, target_id: &str) -> Result<(), CliError> {
         let auth = self.auth_header()?;
-        let resp = self.inner
-            .delete(format!("{}/notes/{}/shares/{}", self.base_url, note_id, target_id))
+        let resp = self
+            .inner
+            .delete(format!(
+                "{}/notes/{}/shares/{}",
+                self.base_url, note_id, target_id
+            ))
             .header("Authorization", auth)
-            .send().await?;
+            .send()
+            .await?;
         if !resp.status().is_success() {
             return Err(CliError::Server(resp.status().to_string()));
         }
@@ -479,7 +500,10 @@ impl JotClient {
         let auth = self.auth_header()?;
         let resp = self
             .inner
-            .put(format!("{}/boards/{}/keys/{}", self.base_url, board_id, identity_id))
+            .put(format!(
+                "{}/boards/{}/keys/{}",
+                self.base_url, board_id, identity_id
+            ))
             .header("Authorization", auth)
             .json(&serde_json::json!({ "encrypted_bek": encrypted_bek_hex }))
             .send()
@@ -491,11 +515,18 @@ impl JotClient {
     }
 
     /// Delete a member's BEK (revoke board access).
-    pub async fn delete_board_key(&self, board_id: Uuid, identity_id: &str) -> Result<(), CliError> {
+    pub async fn delete_board_key(
+        &self,
+        board_id: Uuid,
+        identity_id: &str,
+    ) -> Result<(), CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner
-            .delete(format!("{}/boards/{}/keys/{}", self.base_url, board_id, identity_id))
+            .delete(format!(
+                "{}/boards/{}/keys/{}",
+                self.base_url, board_id, identity_id
+            ))
             .header("Authorization", auth)
             .send()
             .await?;
@@ -520,11 +551,18 @@ impl JotClient {
         Ok(())
     }
 
-    pub async fn revoke_board_share(&self, board_id: Uuid, identity_id: &str) -> Result<(), CliError> {
+    pub async fn revoke_board_share(
+        &self,
+        board_id: Uuid,
+        identity_id: &str,
+    ) -> Result<(), CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner
-            .delete(format!("{}/boards/{}/shares/{}", self.base_url, board_id, identity_id))
+            .delete(format!(
+                "{}/boards/{}/shares/{}",
+                self.base_url, board_id, identity_id
+            ))
             .header("Authorization", auth)
             .send()
             .await?;
@@ -533,7 +571,6 @@ impl JotClient {
         }
         Ok(())
     }
-
 
     pub async fn get_identity_me(&self) -> Result<IdentityInfo, CliError> {
         let auth = self.auth_header()?;
@@ -620,12 +657,18 @@ impl JotClient {
         let mut body = serde_json::Map::new();
         if let Some(n) = display_name {
             if !n.is_empty() {
-                body.insert("display_name".into(), serde_json::Value::String(n.to_string()));
+                body.insert(
+                    "display_name".into(),
+                    serde_json::Value::String(n.to_string()),
+                );
             }
         }
         if let Some(t) = invite_token {
             if !t.is_empty() {
-                body.insert("invite_token".into(), serde_json::Value::String(t.to_string()));
+                body.insert(
+                    "invite_token".into(),
+                    serde_json::Value::String(t.to_string()),
+                );
             }
         }
         let resp = self
@@ -842,7 +885,10 @@ impl JotClient {
 
     // ---------- Block operations (Task 11) ----------
 
-    pub async fn list_blocks(&self, note_id: Uuid) -> Result<Vec<jot_core::models::Block>, CliError> {
+    pub async fn list_blocks(
+        &self,
+        note_id: Uuid,
+    ) -> Result<Vec<jot_core::models::Block>, CliError> {
         let auth = self.auth_header()?;
         let resp = self
             .inner
@@ -1123,9 +1169,9 @@ impl JotClient {
             .lookup_identity(target)
             .await?
             .ok_or_else(|| CliError::Server(format!("identity \"{target}\" not found")))?;
-        let pubkey_hex = target_info
-            .public_key_x25519
-            .ok_or_else(|| CliError::Server(format!("\"{target}\" has no public key registered")))?;
+        let pubkey_hex = target_info.public_key_x25519.ok_or_else(|| {
+            CliError::Server(format!("\"{target}\" has no public key registered"))
+        })?;
 
         let block = self.get_block(block_id).await?;
         let meta = self.get_note_meta(block.note_id).await?;
@@ -1134,7 +1180,8 @@ impl JotClient {
             .await?;
 
         let (secret, public) = identity::load_or_generate()?;
-        self.register_pubkey(&hex::encode(public.as_bytes())).await?;
+        self.register_pubkey(&hex::encode(public.as_bytes()))
+            .await?;
         let recipient_key = identity::cross_wrap_key(&secret, &pubkey_hex)?;
         let ciphertext = encrypt(&recipient_key, &plaintext)
             .map_err(|e| CliError::Server(format!("share encryption failed: {e}")))?;

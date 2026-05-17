@@ -35,7 +35,10 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
         .await
         .map_err(|e| CliError::Server(e.to_string()))?;
     if after > before {
-        println!("{}", t!("cmd.serve.migrated", "from" => before, "to" => after));
+        println!(
+            "{}",
+            t!("cmd.serve.migrated", "from" => before, "to" => after)
+        );
     } else {
         println!("{}", t!("cmd.serve.upToDate", "v" => after));
     }
@@ -49,9 +52,15 @@ pub async fn run(port: u16, open_registration: bool) -> Result<(), CliError> {
     let identity_privkey = identity_secret.to_bytes();
 
     let blobs = Arc::new(LocalStore::new(&blobs_path));
-    let state = AppState::new(db, blobs, signing_pem.clone(), verifying_pem, identity_privkey)
-        .with_open_registration(open_registration)
-        .with_schema_version(schema_version);
+    let state = AppState::new(
+        db,
+        blobs,
+        signing_pem.clone(),
+        verifying_pem,
+        identity_privkey,
+    )
+    .with_open_registration(open_registration)
+    .with_schema_version(schema_version);
     if open_registration {
         println!("{}", t!("cmd.serve.openReg"));
     }

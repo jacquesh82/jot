@@ -44,8 +44,11 @@ fn render_left_pane(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_shared_notes_placeholder(frame: &mut Frame, area: Rect) {
-    let paragraph = Paragraph::new("\u{2014} Shared Notes \u{2014}")
-        .block(Block::default().borders(Borders::ALL).title(t!("tui.title.boardsSharedNotes")));
+    let paragraph = Paragraph::new("\u{2014} Shared Notes \u{2014}").block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(t!("tui.title.boardsSharedNotes")),
+    );
     frame.render_widget(paragraph, area);
 }
 
@@ -78,7 +81,11 @@ fn render_boards(frame: &mut Frame, app: &App, area: Rect) {
                     ListItem::new(format!("{} ({})", b.board_name, owner))
                 })
                 .collect();
-            (t!("tui.title.boardsShared"), items, app.selected_shared_board)
+            (
+                t!("tui.title.boardsShared"),
+                items,
+                app.selected_shared_board,
+            )
         }
         View::SharedNotes | View::Profile | View::Stats | View::Devices => unreachable!(),
     };
@@ -263,10 +270,7 @@ fn render_status(frame: &mut Frame, app: &App, area: Rect) {
                 ConfirmAction::DeleteDevice(_) => t!("tui.confirm.deleteDevice"),
                 ConfirmAction::DeleteAccount => t!("tui.confirm.deleteAccount"),
             };
-            Line::from(vec![Span::styled(
-                msg,
-                Style::default().fg(Color::Red),
-            )])
+            Line::from(vec![Span::styled(msg, Style::default().fg(Color::Red))])
         }
     };
 

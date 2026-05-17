@@ -52,10 +52,7 @@ pub async fn get_me(
     Ok(Json(IdentityResponse {
         id: identity.id.clone(),
         friendly_name: identity.friendly_name,
-        public_key_x25519: identity
-            .public_key_x25519
-            .as_deref()
-            .map(hex::encode),
+        public_key_x25519: identity.public_key_x25519.as_deref().map(hex::encode),
     }))
 }
 
@@ -102,10 +99,7 @@ pub async fn update_me(
     Ok(Json(IdentityResponse {
         id: claims.identity_id,
         friendly_name: name,
-        public_key_x25519: identity
-            .public_key_x25519
-            .as_deref()
-            .map(hex::encode),
+        public_key_x25519: identity.public_key_x25519.as_deref().map(hex::encode),
     }))
 }
 

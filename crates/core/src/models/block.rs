@@ -4,7 +4,15 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum BlockType { Text, Heading, Todo, Quote, Code, Embed, Divider }
+pub enum BlockType {
+    Text,
+    Heading,
+    Todo,
+    Quote,
+    Code,
+    Embed,
+    Divider,
+}
 
 impl BlockType {
     pub fn as_str(&self) -> &'static str {
@@ -18,6 +26,7 @@ impl BlockType {
             BlockType::Divider => "divider",
         }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "heading" => BlockType::Heading,
@@ -47,20 +56,39 @@ pub struct Block {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TargetKind { Note, Block, Tag }
+pub enum TargetKind {
+    Note,
+    Block,
+    Tag,
+}
 
 impl TargetKind {
     pub fn as_str(&self) -> &'static str {
-        match self { TargetKind::Note => "note", TargetKind::Block => "block", TargetKind::Tag => "tag" }
+        match self {
+            TargetKind::Note => "note",
+            TargetKind::Block => "block",
+            TargetKind::Tag => "tag",
+        }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
-        match s { "note" => Some(Self::Note), "block" => Some(Self::Block), "tag" => Some(Self::Tag), _ => None }
+        match s {
+            "note" => Some(Self::Note),
+            "block" => Some(Self::Block),
+            "tag" => Some(Self::Tag),
+            _ => None,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum LinkKind { PageRef, BlockRef, BlockEmbed, Tag }
+pub enum LinkKind {
+    PageRef,
+    BlockRef,
+    BlockEmbed,
+    Tag,
+}
 
 impl LinkKind {
     pub fn as_str(&self) -> &'static str {
@@ -71,6 +99,7 @@ impl LinkKind {
             LinkKind::Tag => "tag",
         }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "page_ref" => Some(Self::PageRef),
@@ -105,13 +134,15 @@ mod tests {
     use super::*;
     #[test]
     fn block_type_round_trip() {
-        for s in ["text","heading","todo","quote","code","embed","divider"] {
+        for s in [
+            "text", "heading", "todo", "quote", "code", "embed", "divider",
+        ] {
             assert_eq!(BlockType::from_str(s).as_str(), s);
         }
     }
     #[test]
     fn link_kind_round_trip() {
-        for s in ["page_ref","block_ref","block_embed","tag"] {
+        for s in ["page_ref", "block_ref", "block_embed", "tag"] {
             assert_eq!(LinkKind::from_str(s).unwrap().as_str(), s);
         }
     }

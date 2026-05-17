@@ -262,7 +262,11 @@ pub async fn outdent_block(
     let parent_id = b
         .parent_block_id
         .ok_or_else(|| ApiError::BadRequest("block is already at root".into()))?;
-    let parent = state.db.get_block(parent_id).await?.ok_or(ApiError::NotFound)?;
+    let parent = state
+        .db
+        .get_block(parent_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let next_pos = parent.position + 0.5;
     state
         .db

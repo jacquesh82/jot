@@ -143,7 +143,10 @@ pub async fn revoke_board_share(
         return Err(ApiError::NotFound);
     }
     // Also remove all note-level DEKs for this identity in the board so they can no longer decrypt.
-    state.db.delete_note_deks_for_board(&bid, &identity_id).await?;
+    state
+        .db
+        .delete_note_deks_for_board(&bid, &identity_id)
+        .await?;
     Ok(Json(serde_json::json!({ "status": "revoked" })))
 }
 

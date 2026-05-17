@@ -56,7 +56,10 @@ async fn make_token(state: &AppState) -> String {
     state.db.insert_device(&device).await.unwrap();
     state
         .db
-        .insert_identity(&identity_id.to_string(), &format!("u-{}", &identity_id.to_string()[..8]))
+        .insert_identity(
+            &identity_id.to_string(),
+            &format!("u-{}", &identity_id.to_string()[..8]),
+        )
         .await
         .unwrap();
     let claims = make_claims(&device_id.to_string(), &identity_id.to_string());

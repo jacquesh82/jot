@@ -14,6 +14,9 @@ pub async fn run(note: Option<Uuid>, block: Option<Uuid>) -> Result<(), CliError
         }
     };
     let body = client.get_json(&path).await?;
-    println!("{}", serde_json::to_string_pretty(&body).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&body).unwrap_or_default()
+    );
     Ok(())
 }

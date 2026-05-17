@@ -15,7 +15,8 @@ pub fn derive_bek(privkey: &[u8; 32], board_id_bytes: &[u8; 16]) -> Result<[u8; 
     let mut info = [0u8; 12 + 16];
     info[..12].copy_from_slice(b"jot-board-v1");
     info[12..].copy_from_slice(board_id_bytes);
-    hk.expand(&info, &mut bek).map_err(|_| CoreError::KeyDerivation)?;
+    hk.expand(&info, &mut bek)
+        .map_err(|_| CoreError::KeyDerivation)?;
     Ok(bek)
 }
 
@@ -27,7 +28,8 @@ pub fn derive_dek(bek: &[u8; 32], note_id_bytes: &[u8; 16]) -> Result<[u8; 32], 
     let mut info = [0u8; 11 + 16];
     info[..11].copy_from_slice(b"jot-note-v1");
     info[11..].copy_from_slice(note_id_bytes);
-    hk.expand(&info, &mut dek).map_err(|_| CoreError::KeyDerivation)?;
+    hk.expand(&info, &mut dek)
+        .map_err(|_| CoreError::KeyDerivation)?;
     Ok(dek)
 }
 

@@ -36,7 +36,10 @@ pub fn load_or_generate() -> Result<(StaticSecret, PublicKey), CliError> {
 
 /// Derive the wrap key for sharing: ECDH(my_priv, peer_pub) → HKDF.
 /// By ECDH symmetry: ECDH(owner_priv, recipient_pub) == ECDH(recipient_priv, owner_pub).
-pub fn cross_wrap_key(my_secret: &StaticSecret, peer_pubkey_hex: &str) -> Result<[u8; 32], CliError> {
+pub fn cross_wrap_key(
+    my_secret: &StaticSecret,
+    peer_pubkey_hex: &str,
+) -> Result<[u8; 32], CliError> {
     let raw = hex::decode(peer_pubkey_hex)
         .map_err(|_| CliError::Config("invalid peer pubkey hex".into()))?;
     if raw.len() != 32 {

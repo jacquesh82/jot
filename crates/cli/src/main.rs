@@ -218,9 +218,7 @@ async fn main() -> Result<(), CliError> {
             devices,
         } => commands::list::run(board, boards, devices).await,
         Command::Link { token } => commands::link::run(&token).await,
-        Command::LinkInit => {
-            commands::link::run_cmd(commands::link::LinkCmd::Init).await
-        }
+        Command::LinkInit => commands::link::run_cmd(commands::link::LinkCmd::Init).await,
         Command::LinkStatus { token } => {
             commands::link::run_cmd(commands::link::LinkCmd::Status { token }).await
         }
@@ -233,17 +231,21 @@ async fn main() -> Result<(), CliError> {
         Command::Invite { label } => {
             commands::invite::run(commands::invite::InviteCmd::Create { label }).await
         }
-        Command::Invites => {
-            commands::invite::run(commands::invite::InviteCmd::List).await
-        }
+        Command::Invites => commands::invite::run(commands::invite::InviteCmd::List).await,
         Command::InviteRevoke { token } => {
             commands::invite::run(commands::invite::InviteCmd::Revoke { token }).await
         }
-        Command::Share { note, with, permission } => commands::share::run_share(note, with, permission).await,
+        Command::Share {
+            note,
+            with,
+            permission,
+        } => commands::share::run_share(note, with, permission).await,
         Command::Revoke { note, identity } => commands::share::run_revoke(note, identity).await,
         Command::Shares { note } => commands::share::run_list(note).await,
         Command::BoardShare { board, with } => commands::board_share::run_share(board, with).await,
-        Command::BoardRevoke { board, identity } => commands::board_share::run_revoke(board, identity).await,
+        Command::BoardRevoke { board, identity } => {
+            commands::board_share::run_revoke(board, identity).await
+        }
         Command::Migrate => commands::migrate::run().await,
         Command::Block { cmd } => commands::block::run(cmd).await,
         Command::Note { cmd } => commands::note::run(cmd).await,

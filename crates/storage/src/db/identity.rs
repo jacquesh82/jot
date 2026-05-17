@@ -160,11 +160,7 @@ impl Db {
         Ok(blob_keys)
     }
 
-    pub async fn set_identity_pubkey(
-        &self,
-        id: &str,
-        pubkey: &[u8],
-    ) -> Result<(), StorageError> {
+    pub async fn set_identity_pubkey(&self, id: &str, pubkey: &[u8]) -> Result<(), StorageError> {
         sqlx::query("UPDATE identities SET public_key_x25519 = ? WHERE id = ?")
             .bind(pubkey)
             .bind(id)

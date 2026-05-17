@@ -26,7 +26,7 @@ pub struct SharedNoteRow {
 /// Hierarchy: delete ≥ write ≥ read.
 pub fn permission_allows(actual: &str, required: &str) -> bool {
     match required {
-        "read" => true,
+        "read" => matches!(actual, "read" | "write" | "delete"),
         "write" => matches!(actual, "write" | "delete"),
         "delete" => actual == "delete",
         _ => false,
@@ -106,7 +106,9 @@ impl Db {
                     owner_identity_id: r.get("owner_identity_id"),
                     owner_friendly_name: r.get("owner_friendly_name"),
                     encrypted_dek: r.get("encrypted_dek"),
-                    snippet: snippet_bytes.and_then(|b| String::from_utf8(b).ok()).filter(|s| !s.is_empty()),
+                    snippet: snippet_bytes
+                        .and_then(|b| String::from_utf8(b).ok())
+                        .filter(|s| !s.is_empty()),
                 }
             })
             .collect())

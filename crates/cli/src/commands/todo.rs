@@ -20,10 +20,7 @@ pub async fn run(tag: Option<String>) -> Result<(), CliError> {
                 if !matches!(blk.block_type, BlockType::Todo) {
                     continue;
                 }
-                let plain = match client
-                    .decrypt_with_note_dek(b.id, n.id, &blk.content)
-                    .await
-                {
+                let plain = match client.decrypt_with_note_dek(b.id, n.id, &blk.content).await {
                     Ok(p) => String::from_utf8_lossy(&p).to_string(),
                     Err(_) => continue,
                 };

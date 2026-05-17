@@ -33,7 +33,11 @@ pub async fn get_board_key(
     let bid = board_id.to_string();
 
     // Must be a member (not the owner — owner derives locally).
-    let board = state.db.get_board(board_id).await?.ok_or(ApiError::NotFound)?;
+    let board = state
+        .db
+        .get_board(board_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     if board.identity_id.to_string() == claims.identity_id {
         return Err(ApiError::BadRequest("owner derives BEK locally".into()));
     }
@@ -54,7 +58,7 @@ pub async fn get_board_key(
         .get_identity_by_id(&board.identity_id.to_string())
         .await?
         .and_then(|i| i.public_key_x25519)
-        .map(|b| hex::encode(b));
+        .map(hex::encode);
 
     Ok(Json(GetBekResponse {
         encrypted_bek: hex::encode(bek),
@@ -72,16 +76,23 @@ pub async fn put_board_key(
     let bid = board_id.to_string();
 
     if !state.db.owns_board(&bid, &claims.identity_id).await? {
-        return Err(ApiError::Forbidden("only the board owner can distribute keys".into()));
+        return Err(ApiError::Forbidden(
+            "only the board owner can distribute keys".into(),
+        ));
     }
     if identity_id == claims.identity_id {
-        return Err(ApiError::BadRequest("owner derives BEK locally, not stored".into()));
+        return Err(ApiError::BadRequest(
+            "owner derives BEK locally, not stored".into(),
+        ));
     }
 
     let bek_bytes = hex::decode(&body.encrypted_bek)
         .map_err(|_| ApiError::BadRequest("encrypted_bek must be hex".into()))?;
 
-    state.db.put_board_key(&bid, &identity_id, bek_bytes).await?;
+    state
+        .db
+        .put_board_key(&bid, &identity_id, bek_bytes)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -94,7 +105,9 @@ pub async fn delete_board_key(
     let bid = board_id.to_string();
 
     if !state.db.owns_board(&bid, &claims.identity_id).await? {
-        return Err(ApiError::Forbidden("only the board owner can revoke keys".into()));
+        return Err(ApiError::Forbidden(
+            "only the board owner can revoke keys".into(),
+        ));
     }
 
     state.db.delete_board_key(&bid, &identity_id).await?;
