@@ -19,7 +19,7 @@ ThemeData jotLight() {
         borderSide: BorderSide.none,
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       elevation: 0,
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -41,7 +41,7 @@ ThemeData jotDark() {
         borderSide: BorderSide.none,
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       elevation: 0,
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
