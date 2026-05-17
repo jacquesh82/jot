@@ -24,7 +24,7 @@ jobs:
 
     env:
       FLUTTER_VERSION: '3.24.5'
-      NDK_VERSION: '26.3.11579264'
+      NDK_VERSION: 'r26d'
 
     steps:
       - uses: actions/checkout@v4
@@ -50,9 +50,14 @@ jobs:
           workspaces: '. -> target'
 
       - name: Install Android NDK ${{ env.NDK_VERSION }}
-        run: |
-          echo "y" | sdkmanager --install "ndk;${{ env.NDK_VERSION }}" >/dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: false
+
+      - name: Export NDK path
+        run: echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
