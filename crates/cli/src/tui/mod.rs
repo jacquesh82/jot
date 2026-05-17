@@ -267,20 +267,14 @@ async fn handle_normal(app: &mut App, code: KeyCode) {
             }
             Focus::Notes => refresh(app).await,
         },
-        KeyCode::Char('D') => {
-            if app.focus == Focus::Boards {
-                app.start_delete_board();
-            }
+        KeyCode::Char('D') if app.focus == Focus::Boards => {
+            app.start_delete_board();
         }
-        KeyCode::Char('d') => {
-            if app.focus == Focus::Notes {
-                app.start_delete();
-            }
+        KeyCode::Char('d') if app.focus == Focus::Notes => {
+            app.start_delete();
         }
-        KeyCode::Char('e') => {
-            if app.focus == Focus::Notes {
-                app.pending_edit = app.current_note_id();
-            }
+        KeyCode::Char('e') if app.focus == Focus::Notes => {
+            app.pending_edit = app.current_note_id();
         }
         KeyCode::Char('S') => {
             app.cycle_view();
