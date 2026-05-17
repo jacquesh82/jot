@@ -1,0 +1,103 @@
+name: Android debug APK
+
+# Builds a debug APK on every push to a mobile-related branch and on manual
+# dispatch. The APK is uploaded as a workflow artifact so it can be sideloaded
+# straight onto a phone without installing Android Studio locally.
+
+on:
+  push:
+    branches:
+      - claude/android-app-work-*
+      - mobile-*
+    paths:
+      - 'mobile/**'
+      - 'crates/mobile-ffi/**'
+      - 'crates/core/**'
+      - '.github/workflows/android-debug.yml'
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Build debug APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      FLUTTER_VERSION: '3.24.5'
+      NDK_VERSION: '26.3.11579264'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── toolchains ────────────────────────────────────────────────────────
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+
+      - name: Install Android NDK ${{ env.NDK_VERSION }}
+        run: |
+          echo "y" | sdkmanager --install "ndk;${{ env.NDK_VERSION }}" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      # ── Flutter scaffolding ───────────────────────────────────────────────
+      # android/ is gitignored, regenerate it before pub get & before we copy
+      # the cross-compiled .so into jniLibs. `flutter create` only adds files
+      # that don't already exist, so it won't touch our lib/ tree.
+      - name: Generate android/ scaffolding
+        working-directory: mobile
+        run: flutter create . --project-name jot_mobile --org dev.jot --platforms=android
+
+      # ── Rust FFI shim ─────────────────────────────────────────────────────
+      - name: Cross-compile jot-mobile-ffi for arm64-v8a
+        run: |
+          mkdir -p mobile/android/app/src/main/jniLibs
+          cargo ndk -t arm64-v8a \
+            -o mobile/android/app/src/main/jniLibs \
+            build -p jot-mobile-ffi --release
+          ls -lh mobile/android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: flutter pub get
+        working-directory: mobile
+        run: flutter pub get
+
+      # ── APK build ─────────────────────────────────────────────────────────
+      - name: flutter build apk --debug
+        working-directory: mobile
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Rename APK with short SHA
+        id: rename
+        working-directory: mobile
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          src=build/app/outputs/flutter-apk/app-debug.apk
+          dst=jot-${sha}-debug-arm64.apk
+          mv "$src" "$dst"
+          echo "apk=$dst" >> $GITHUB_OUTPUT
+          ls -lh "$dst"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.rename.outputs.apk }}
+          path: mobile/${{ steps.rename.outputs.apk }}
+          if-no-files-found: error
+          retention-days: 14
