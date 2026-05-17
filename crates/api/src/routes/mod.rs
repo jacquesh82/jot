@@ -43,7 +43,9 @@ pub fn build(state: AppState) -> Router {
         .route("/link/status/:token", get(link::link_status))
         .route(
             "/identity/me",
-            get(identity::get_me).patch(identity::update_me).delete(identity::delete_identity),
+            get(identity::get_me)
+                .patch(identity::update_me)
+                .delete(identity::delete_identity),
         )
         .route("/identity/me/pubkey", put(identity::set_pubkey))
         .route("/identity/me/privkey", get(identity::get_privkey))
@@ -92,7 +94,10 @@ pub fn build(state: AppState) -> Router {
             delete(shares::delete_share),
         )
         .route("/notes/:id/dek", get(shares::get_dek).put(shares::put_dek))
-        .route("/notes/:id/deks/:identity_id", put(shares::put_dek_for_identity))
+        .route(
+            "/notes/:id/deks/:identity_id",
+            put(shares::put_dek_for_identity),
+        )
         .route(
             "/boards",
             get(boards::list_boards).post(boards::create_board),

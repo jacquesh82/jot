@@ -128,11 +128,14 @@ pub async fn run(cmd: BlockCmd) -> Result<(), CliError> {
             let body = client.block_backlinks(id).await?;
             println!(
                 "{}",
-                serde_json::to_string_pretty(&body)
-                    .unwrap_or_else(|_| body.to_string())
+                serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string())
             );
         }
-        BlockCmd::Share { id, with, permission } => {
+        BlockCmd::Share {
+            id,
+            with,
+            permission,
+        } => {
             if !matches!(permission.as_str(), "read" | "write") {
                 return Err(CliError::Config("permission must be read|write".into()));
             }
@@ -158,7 +161,10 @@ pub async fn run(cmd: BlockCmd) -> Result<(), CliError> {
                     println!("  {name} ({}) [{perm}]", &sid[..sid.len().min(8)]);
                 }
             } else {
-                println!("{}", serde_json::to_string_pretty(&body).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&body).unwrap_or_default()
+                );
             }
         }
         BlockCmd::Shared => {

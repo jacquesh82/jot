@@ -51,7 +51,11 @@ async fn create_flow() -> Result<(), CliError> {
     let res = client.register(display, None).await;
     let (jwt, identity_id, device_id) = match res {
         Ok(v) => v,
-        Err(CliError::Server(msg)) if msg.contains("invite_required") || msg.contains("invalid_invite") || msg.contains("invite_revoked") => {
+        Err(CliError::Server(msg))
+            if msg.contains("invite_required")
+                || msg.contains("invalid_invite")
+                || msg.contains("invite_revoked") =>
+        {
             let invite = prompt(&t!("onboarding.inviteToken"))?;
             client.register(display, Some(invite.trim())).await?
         }
@@ -70,7 +74,9 @@ async fn create_flow() -> Result<(), CliError> {
     // Register our X25519 pubkey so we can share/be shared with right away.
     let authed = JotClient::new(&cfg);
     let (_secret, public) = identity::load_or_generate()?;
-    authed.register_pubkey(&hex::encode(public.as_bytes())).await?;
+    authed
+        .register_pubkey(&hex::encode(public.as_bytes()))
+        .await?;
 
     println!("{}", t!("onboarding.accountCreated"));
     Ok(())

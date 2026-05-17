@@ -20,8 +20,14 @@ pub fn split_markdown(md: &str) -> Vec<SplitBlock> {
         let mut consumed = 0;
         for c in chars.by_ref() {
             match c {
-                ' ' => { spaces += 1; consumed += 1; }
-                '\t' => { spaces += 2; consumed += 1; }
+                ' ' => {
+                    spaces += 1;
+                    consumed += 1;
+                }
+                '\t' => {
+                    spaces += 2;
+                    consumed += 1;
+                }
                 _ => break,
             }
         }
@@ -31,7 +37,11 @@ pub fn split_markdown(md: &str) -> Vec<SplitBlock> {
     let flush_para = |out: &mut Vec<SplitBlock>, para: &mut String, indent: u8| {
         let trimmed = para.trim_end();
         if !trimmed.is_empty() {
-            out.push(SplitBlock { block_type: BlockType::Text, content: trimmed.to_string(), indent });
+            out.push(SplitBlock {
+                block_type: BlockType::Text,
+                content: trimmed.to_string(),
+                indent,
+            });
         }
         para.clear();
     };
@@ -39,7 +49,11 @@ pub fn split_markdown(md: &str) -> Vec<SplitBlock> {
     for raw in md.lines() {
         if in_code {
             if raw.trim_start().starts_with("```") {
-                out.push(SplitBlock { block_type: BlockType::Code, content: code_buf.trim_end().to_string(), indent: code_indent });
+                out.push(SplitBlock {
+                    block_type: BlockType::Code,
+                    content: code_buf.trim_end().to_string(),
+                    indent: code_indent,
+                });
                 code_buf.clear();
                 in_code = false;
             } else {
@@ -63,39 +77,64 @@ pub fn split_markdown(md: &str) -> Vec<SplitBlock> {
         }
         if rest.starts_with("---") && rest.trim() == "---" {
             flush_para(&mut out, &mut paragraph, indent);
-            out.push(SplitBlock { block_type: BlockType::Divider, content: String::new(), indent });
+            out.push(SplitBlock {
+                block_type: BlockType::Divider,
+                content: String::new(),
+                indent,
+            });
             continue;
         }
         if let Some(hashes) = rest.strip_prefix('#') {
             let mut level = 1;
             let mut tail = hashes;
             while let Some(rest2) = tail.strip_prefix('#') {
-                level += 1; tail = rest2;
-                if level >= 6 { break; }
+                level += 1;
+                tail = rest2;
+                if level >= 6 {
+                    break;
+                }
             }
             if let Some(text) = tail.strip_prefix(' ') {
                 flush_para(&mut out, &mut paragraph, indent);
-                out.push(SplitBlock { block_type: BlockType::Heading, content: format!("{} {}", "#".repeat(level), text), indent });
+                out.push(SplitBlock {
+                    block_type: BlockType::Heading,
+                    content: format!("{} {}", "#".repeat(level), text),
+                    indent,
+                });
                 continue;
             }
         }
         if rest.starts_with("- [ ] ") || rest.starts_with("- [x] ") || rest.starts_with("- [X] ") {
             flush_para(&mut out, &mut paragraph, indent);
-            out.push(SplitBlock { block_type: BlockType::Todo, content: rest.to_string(), indent });
+            out.push(SplitBlock {
+                block_type: BlockType::Todo,
+                content: rest.to_string(),
+                indent,
+            });
             continue;
         }
         if rest.starts_with("> ") {
             flush_para(&mut out, &mut paragraph, indent);
-            out.push(SplitBlock { block_type: BlockType::Quote, content: rest[2..].to_string(), indent });
+            out.push(SplitBlock {
+                block_type: BlockType::Quote,
+                content: rest[2..].to_string(),
+                indent,
+            });
             continue;
         }
 
-        if !paragraph.is_empty() { paragraph.push('\n'); }
+        if !paragraph.is_empty() {
+            paragraph.push('\n');
+        }
         paragraph.push_str(rest);
     }
     flush_para(&mut out, &mut paragraph, 0);
     if in_code && !code_buf.is_empty() {
-        out.push(SplitBlock { block_type: BlockType::Code, content: code_buf.trim_end().to_string(), indent: code_indent });
+        out.push(SplitBlock {
+            block_type: BlockType::Code,
+            content: code_buf.trim_end().to_string(),
+            indent: code_indent,
+        });
     }
     out
 }
@@ -145,7 +184,12 @@ mod tests {
     #[test]
     fn divider_is_detected() {
         let out = split_markdown("a\n\n---\n\nb");
-        assert_eq!(out.iter().filter(|b| b.block_type == BlockType::Divider).count(), 1);
+        assert_eq!(
+            out.iter()
+                .filter(|b| b.block_type == BlockType::Divider)
+                .count(),
+            1
+        );
     }
 
     #[test]

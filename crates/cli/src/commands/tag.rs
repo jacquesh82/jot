@@ -32,7 +32,10 @@ pub async fn run(cmd: TagCmd) -> Result<(), CliError> {
                     println!("  {name}\t{color}");
                 }
             } else {
-                println!("{}", serde_json::to_string_pretty(&body).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&body).unwrap_or_default()
+                );
             }
         }
         TagCmd::Blocks { name } => {

@@ -25,7 +25,10 @@ pub async fn run() -> Result<(), CliError> {
         .map_err(|e| CliError::Server(e.to_string()))?;
 
     if after > before {
-        println!("{}", t!("cmd.migrate.migrated", "from" => before, "to" => after));
+        println!(
+            "{}",
+            t!("cmd.migrate.migrated", "from" => before, "to" => after)
+        );
     } else {
         println!("{}", t!("cmd.migrate.upToDate", "v" => after));
     }

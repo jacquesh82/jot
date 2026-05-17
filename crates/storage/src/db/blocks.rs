@@ -22,8 +22,12 @@ fn row_to_block(row: &sqlx::sqlite::SqliteRow) -> Block {
         content: row.get("content"),
         metadata: row.get("metadata"),
         collapsed: collapsed != 0,
-        created_at: chrono::DateTime::parse_from_rfc3339(&created).unwrap().with_timezone(&Utc),
-        updated_at: chrono::DateTime::parse_from_rfc3339(&updated).unwrap().with_timezone(&Utc),
+        created_at: chrono::DateTime::parse_from_rfc3339(&created)
+            .unwrap()
+            .with_timezone(&Utc),
+        updated_at: chrono::DateTime::parse_from_rfc3339(&updated)
+            .unwrap()
+            .with_timezone(&Utc),
     }
 }
 
@@ -49,7 +53,9 @@ impl Db {
 
     pub async fn get_block(&self, id: Uuid) -> Result<Option<Block>, StorageError> {
         let row = sqlx::query("SELECT * FROM blocks WHERE id = ?")
-            .bind(id.to_string()).fetch_optional(&self.0).await?;
+            .bind(id.to_string())
+            .fetch_optional(&self.0)
+            .await?;
         Ok(row.map(|r| row_to_block(&r)))
     }
 
@@ -60,7 +66,13 @@ impl Db {
         Ok(rows.iter().map(row_to_block).collect())
     }
 
-    pub async fn update_block_content(&self, id: Uuid, content: &[u8], metadata: Option<&[u8]>, block_type: BlockType) -> Result<(), StorageError> {
+    pub async fn update_block_content(
+        &self,
+        id: Uuid,
+        content: &[u8],
+        metadata: Option<&[u8]>,
+        block_type: BlockType,
+    ) -> Result<(), StorageError> {
         sqlx::query("UPDATE blocks SET content = ?, metadata = ?, block_type = ?, updated_at = ? WHERE id = ?")
             .bind(content).bind(metadata).bind(block_type.as_str())
             .bind(Utc::now().to_rfc3339()).bind(id.to_string())
@@ -68,37 +80,64 @@ impl Db {
         Ok(())
     }
 
-    pub async fn move_block(&self, id: Uuid, new_parent: Option<Uuid>, new_position: f64) -> Result<(), StorageError> {
-        sqlx::query("UPDATE blocks SET parent_block_id = ?, position = ?, updated_at = ? WHERE id = ?")
-            .bind(new_parent.map(|p| p.to_string())).bind(new_position)
-            .bind(Utc::now().to_rfc3339()).bind(id.to_string())
-            .execute(&self.0).await?;
+    pub async fn move_block(
+        &self,
+        id: Uuid,
+        new_parent: Option<Uuid>,
+        new_position: f64,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            "UPDATE blocks SET parent_block_id = ?, position = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(new_parent.map(|p| p.to_string()))
+        .bind(new_position)
+        .bind(Utc::now().to_rfc3339())
+        .bind(id.to_string())
+        .execute(&self.0)
+        .await?;
         Ok(())
     }
 
     pub async fn set_block_collapsed(&self, id: Uuid, collapsed: bool) -> Result<(), StorageError> {
         sqlx::query("UPDATE blocks SET collapsed = ? WHERE id = ?")
-            .bind(if collapsed { 1i64 } else { 0i64 }).bind(id.to_string())
-            .execute(&self.0).await?;
+            .bind(if collapsed { 1i64 } else { 0i64 })
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
         Ok(())
     }
 
     pub async fn delete_block(&self, id: Uuid) -> Result<(), StorageError> {
-        sqlx::query("DELETE FROM blocks WHERE id = ?").bind(id.to_string())
-            .execute(&self.0).await?;
+        sqlx::query("DELETE FROM blocks WHERE id = ?")
+            .bind(id.to_string())
+            .execute(&self.0)
+            .await?;
         Ok(())
     }
 
-    pub async fn previous_sibling(&self, note: Uuid, parent: Option<Uuid>, before_pos: f64) -> Result<Option<Block>, StorageError> {
+    pub async fn previous_sibling(
+        &self,
+        note: Uuid,
+        parent: Option<Uuid>,
+        before_pos: f64,
+    ) -> Result<Option<Block>, StorageError> {
         let row = sqlx::query(
             "SELECT * FROM blocks WHERE note_id = ? AND parent_block_id IS ? AND position < ?
-             ORDER BY position DESC LIMIT 1"
-        ).bind(note.to_string()).bind(parent.map(|p| p.to_string())).bind(before_pos)
-        .fetch_optional(&self.0).await?;
+             ORDER BY position DESC LIMIT 1",
+        )
+        .bind(note.to_string())
+        .bind(parent.map(|p| p.to_string()))
+        .bind(before_pos)
+        .fetch_optional(&self.0)
+        .await?;
         Ok(row.map(|r| row_to_block(&r)))
     }
 
-    pub async fn max_position(&self, note_id: Uuid, parent: Option<Uuid>) -> Result<f64, StorageError> {
+    pub async fn max_position(
+        &self,
+        note_id: Uuid,
+        parent: Option<Uuid>,
+    ) -> Result<f64, StorageError> {
         let row = sqlx::query(
             "SELECT COALESCE(MAX(position), 0.0) AS m FROM blocks WHERE note_id = ? AND parent_block_id IS ?"
         )
@@ -118,9 +157,17 @@ mod tests {
     async fn seed_note(db: &Db) -> (Uuid, Uuid) {
         let board = Uuid::new_v4();
         let note = Uuid::new_v4();
-        sqlx::query("INSERT INTO boards (id, identity_id, name, position, created_at) VALUES (?,?,?,?,?)")
-            .bind(board.to_string()).bind(Uuid::new_v4().to_string()).bind("b").bind(0i32).bind(Utc::now().to_rfc3339())
-            .execute(&db.0).await.unwrap();
+        sqlx::query(
+            "INSERT INTO boards (id, identity_id, name, position, created_at) VALUES (?,?,?,?,?)",
+        )
+        .bind(board.to_string())
+        .bind(Uuid::new_v4().to_string())
+        .bind("b")
+        .bind(0i32)
+        .bind(Utc::now().to_rfc3339())
+        .execute(&db.0)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO notes (id, note_type, content, color, board_id, position, blob_key, size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
             .bind(note.to_string()).bind("text").bind(b"".to_vec()).bind("#FFF").bind(board.to_string()).bind(0i32).bind(Uuid::new_v4().to_string()).bind(0i64)
             .bind(Utc::now().to_rfc3339()).bind(Utc::now().to_rfc3339())
@@ -131,9 +178,16 @@ mod tests {
     fn make_block(note_id: Uuid, parent: Option<Uuid>, pos: f64) -> Block {
         let now = Utc::now();
         Block {
-            id: Uuid::new_v4(), note_id, parent_block_id: parent, position: pos,
-            block_type: BlockType::Text, content: b"hello".to_vec(), metadata: None, collapsed: false,
-            created_at: now, updated_at: now,
+            id: Uuid::new_v4(),
+            note_id,
+            parent_block_id: parent,
+            position: pos,
+            block_type: BlockType::Text,
+            content: b"hello".to_vec(),
+            metadata: None,
+            collapsed: false,
+            created_at: now,
+            updated_at: now,
         }
     }
 

@@ -14,28 +14,63 @@ static BLOCK_RE: OnceLock<Regex> = OnceLock::new();
 static EMBED_RE: OnceLock<Regex> = OnceLock::new();
 static TAG_RE: OnceLock<Regex> = OnceLock::new();
 
-fn page_re()  -> &'static Regex { PAGE_RE.get_or_init(|| Regex::new(r"\[\[([^\]\n]+?)\]\]").unwrap()) }
-fn embed_re() -> &'static Regex { EMBED_RE.get_or_init(|| Regex::new(r"!\(\(([0-9a-fA-F-]{36})\)\)").unwrap()) }
-fn block_re() -> &'static Regex { BLOCK_RE.get_or_init(|| Regex::new(r"\(\(([0-9a-fA-F-]{36})\)\)").unwrap()) }
-fn tag_re()   -> &'static Regex { TAG_RE.get_or_init(|| Regex::new(r"(?:^|\s)#([A-Za-z0-9_\-]+)").unwrap()) }
+fn page_re() -> &'static Regex {
+    PAGE_RE.get_or_init(|| Regex::new(r"\[\[([^\]\n]+?)\]\]").unwrap())
+}
+fn embed_re() -> &'static Regex {
+    EMBED_RE.get_or_init(|| Regex::new(r"!\(\(([0-9a-fA-F-]{36})\)\)").unwrap())
+}
+fn block_re() -> &'static Regex {
+    BLOCK_RE.get_or_init(|| Regex::new(r"\(\(([0-9a-fA-F-]{36})\)\)").unwrap())
+}
+fn tag_re() -> &'static Regex {
+    TAG_RE.get_or_init(|| Regex::new(r"(?:^|\s)#([A-Za-z0-9_\-]+)").unwrap())
+}
 
-pub fn extract_links(markdown: &str, title_to_id: &std::collections::HashMap<String, String>) -> Vec<ExtractedLink> {
+pub fn extract_links(
+    markdown: &str,
+    title_to_id: &std::collections::HashMap<String, String>,
+) -> Vec<ExtractedLink> {
     let mut out = Vec::new();
     for cap in embed_re().captures_iter(markdown) {
-        out.push(ExtractedLink { target_kind: TargetKind::Block, target_id: cap[1].to_string(), link_kind: LinkKind::BlockEmbed });
+        out.push(ExtractedLink {
+            target_kind: TargetKind::Block,
+            target_id: cap[1].to_string(),
+            link_kind: LinkKind::BlockEmbed,
+        });
     }
     for cap in block_re().captures_iter(markdown) {
         let id = cap[1].to_string();
-        if out.iter().any(|l| l.target_id == id && l.link_kind == LinkKind::BlockEmbed) { continue; }
-        out.push(ExtractedLink { target_kind: TargetKind::Block, target_id: id, link_kind: LinkKind::BlockRef });
+        if out
+            .iter()
+            .any(|l| l.target_id == id && l.link_kind == LinkKind::BlockEmbed)
+        {
+            continue;
+        }
+        out.push(ExtractedLink {
+            target_kind: TargetKind::Block,
+            target_id: id,
+            link_kind: LinkKind::BlockRef,
+        });
     }
     for cap in page_re().captures_iter(markdown) {
         let title = cap[1].trim().to_string();
-        let id = title_to_id.get(&title.to_lowercase()).cloned().unwrap_or(title);
-        out.push(ExtractedLink { target_kind: TargetKind::Note, target_id: id, link_kind: LinkKind::PageRef });
+        let id = title_to_id
+            .get(&title.to_lowercase())
+            .cloned()
+            .unwrap_or(title);
+        out.push(ExtractedLink {
+            target_kind: TargetKind::Note,
+            target_id: id,
+            link_kind: LinkKind::PageRef,
+        });
     }
     for cap in tag_re().captures_iter(markdown) {
-        out.push(ExtractedLink { target_kind: TargetKind::Tag, target_id: cap[1].to_string(), link_kind: LinkKind::Tag });
+        out.push(ExtractedLink {
+            target_kind: TargetKind::Tag,
+            target_id: cap[1].to_string(),
+            link_kind: LinkKind::Tag,
+        });
     }
     out
 }
@@ -73,7 +108,11 @@ mod tests {
     #[test]
     fn detects_tag() {
         let out = extract_links("status #wip and #done-2025", &HashMap::new());
-        let tags: Vec<_> = out.iter().filter(|l| l.link_kind == LinkKind::Tag).map(|l| l.target_id.clone()).collect();
+        let tags: Vec<_> = out
+            .iter()
+            .filter(|l| l.link_kind == LinkKind::Tag)
+            .map(|l| l.target_id.clone())
+            .collect();
         assert_eq!(tags, vec!["wip", "done-2025"]);
     }
 }

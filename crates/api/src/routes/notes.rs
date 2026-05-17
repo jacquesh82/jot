@@ -1,8 +1,6 @@
 use crate::auth::middleware::AuthenticatedDevice;
 use crate::state::{AppState, WsEvent};
 use crate::ApiError;
-use base64::Engine;
-use storage::db::shares::permission_allows;
 use axum::{
     body::Bytes,
     extract::{Path, Query, State},
@@ -10,9 +8,11 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use base64::Engine;
 use chrono::Utc;
 use jot_core::models::{Note, NoteType};
 use serde::{Deserialize, Serialize};
+use storage::db::shares::permission_allows;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -138,11 +138,16 @@ pub async fn list_notes(
     // - individual share recipient: encrypted when a DEK exists in note_shares
     let is_owner = state.db.owns_board(&bid, &auth.0.identity_id).await?;
     let (shared_ids, all_encrypted) = if is_owner {
-        let shared = state.db.list_shared_note_ids_for_board(&bid, &auth.0.identity_id).await?;
+        let shared = state
+            .db
+            .list_shared_note_ids_for_board(&bid, &auth.0.identity_id)
+            .await?;
         (shared, true)
     } else {
         let (shared, has_bek) = tokio::try_join!(
-            state.db.list_shared_note_ids_for_board(&bid, &auth.0.identity_id),
+            state
+                .db
+                .list_shared_note_ids_for_board(&bid, &auth.0.identity_id),
             state.db.has_board_key(&bid, &auth.0.identity_id),
         )?;
         (shared, has_bek)
@@ -150,7 +155,10 @@ pub async fn list_notes(
 
     // For individual share recipients (not owner, no BEK) fall back to note-level DEK check.
     let note_level_encrypted: std::collections::HashSet<String> = if !is_owner && !all_encrypted {
-        state.db.list_encrypted_note_ids_for_board(&bid, &auth.0.identity_id).await?
+        state
+            .db
+            .list_encrypted_note_ids_for_board(&bid, &auth.0.identity_id)
+            .await?
     } else {
         std::collections::HashSet::new()
     };
@@ -243,7 +251,11 @@ pub async fn get_note(
         if has_bek {
             true
         } else {
-            state.db.get_note_dek(&id.to_string(), &auth.0.identity_id).await?.is_some()
+            state
+                .db
+                .get_note_dek(&id.to_string(), &auth.0.identity_id)
+                .await?
+                .is_some()
         }
     };
     let mut m = to_metadata(&note);
@@ -427,11 +439,12 @@ pub async fn patch_schema_version(
         .note_permission_for(&id.to_string(), &auth.0.identity_id)
         .await?;
     if !permission_allows(&perm, "write") {
-        return Err(ApiError::Forbidden(
-            "no write permission on note".into(),
-        ));
+        return Err(ApiError::Forbidden("no write permission on note".into()));
     }
-    state.db.set_note_schema_version(id, body.schema_version).await?;
+    state
+        .db
+        .set_note_schema_version(id, body.schema_version)
+        .await?;
     let _ = state
         .ws_tx
         .send(WsEvent::NoteUpdated { id: id.to_string() });
@@ -444,7 +457,10 @@ pub async fn list_legacy_text_notes(
 ) -> Result<Json<Vec<String>>, ApiError> {
     let identity = Uuid::parse_str(&auth.0.identity_id)
         .map_err(|_| ApiError::BadRequest("bad identity id".into()))?;
-    let ids = state.db.list_legacy_text_notes_for_identity(identity).await?;
+    let ids = state
+        .db
+        .list_legacy_text_notes_for_identity(identity)
+        .await?;
     Ok(Json(ids.into_iter().map(|i| i.to_string()).collect()))
 }
 

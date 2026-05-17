@@ -199,7 +199,10 @@ async fn handle_normal(app: &mut App, code: KeyCode) {
             return;
         }
         KeyCode::Esc => {
-            if !matches!(app.view, View::MyBoards | View::SharedBoards | View::SharedNotes) {
+            if !matches!(
+                app.view,
+                View::MyBoards | View::SharedBoards | View::SharedNotes
+            ) {
                 app.view = View::MyBoards;
                 app.focus = Focus::Boards;
                 reload_boards(app).await;
@@ -335,10 +338,11 @@ async fn handle_block_keys(app: &mut App, code: KeyCode) -> bool {
         None => return false,
     };
 
-    let flat: Vec<jot_core::models::Block> = crate::tui::blocks::flatten_depth_first(&app.block_panel.blocks)
-        .into_iter()
-        .cloned()
-        .collect();
+    let flat: Vec<jot_core::models::Block> =
+        crate::tui::blocks::flatten_depth_first(&app.block_panel.blocks)
+            .into_iter()
+            .cloned()
+            .collect();
     let flat_len = flat.len();
     let current = flat.get(app.block_panel.cursor).cloned();
 
@@ -504,15 +508,13 @@ async fn handle_input(app: &mut App, code: KeyCode, ctx: InputContext) {
                         }
                     }
                 }
-                InputContext::NewBoard => {
-                    match app.client.clone().create_board(&buf).await {
-                        Ok(_) => {
-                            app.status = t!("tui.msg.boardCreated");
-                            reload_boards(app).await;
-                        }
-                        Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                InputContext::NewBoard => match app.client.clone().create_board(&buf).await {
+                    Ok(_) => {
+                        app.status = t!("tui.msg.boardCreated");
+                        reload_boards(app).await;
                     }
-                }
+                    Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                },
                 InputContext::RenameBoard(id) => {
                     match app.client.clone().rename_board(id, &buf).await {
                         Ok(_) => {
@@ -543,24 +545,20 @@ async fn handle_confirm(app: &mut App, code: KeyCode, action: ConfirmAction) {
         KeyCode::Char('y') => {
             app.cancel_mode();
             match action {
-                ConfirmAction::DeleteNote(id) => {
-                    match app.client.clone().delete_note(id).await {
-                        Ok(_) => {
-                            app.status = t!("tui.msg.noteDeleted");
-                            load_notes(app).await;
-                        }
-                        Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                ConfirmAction::DeleteNote(id) => match app.client.clone().delete_note(id).await {
+                    Ok(_) => {
+                        app.status = t!("tui.msg.noteDeleted");
+                        load_notes(app).await;
                     }
-                }
-                ConfirmAction::DeleteBoard(id) => {
-                    match app.client.clone().delete_board(id).await {
-                        Ok(_) => {
-                            app.status = t!("tui.msg.boardDeleted");
-                            reload_boards(app).await;
-                        }
-                        Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                    Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                },
+                ConfirmAction::DeleteBoard(id) => match app.client.clone().delete_board(id).await {
+                    Ok(_) => {
+                        app.status = t!("tui.msg.boardDeleted");
+                        reload_boards(app).await;
                     }
-                }
+                    Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                },
                 ConfirmAction::DeleteDevice(id) => {
                     match app.client.clone().delete_device(id).await {
                         Ok(_) => {
@@ -570,20 +568,18 @@ async fn handle_confirm(app: &mut App, code: KeyCode, action: ConfirmAction) {
                         Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
                     }
                 }
-                ConfirmAction::DeleteAccount => {
-                    match app.client.clone().delete_account().await {
-                        Ok(_) => {
-                            let mut config = crate::config::Config::load();
-                            config.token = None;
-                            config.identity_id = None;
-                            config.device_id = None;
-                            let _ = config.save();
-                            app.status = t!("tui.msg.accountDeleted");
-                            app.should_quit = true;
-                        }
-                        Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                ConfirmAction::DeleteAccount => match app.client.clone().delete_account().await {
+                    Ok(_) => {
+                        let mut config = crate::config::Config::load();
+                        config.token = None;
+                        config.identity_id = None;
+                        config.device_id = None;
+                        let _ = config.save();
+                        app.status = t!("tui.msg.accountDeleted");
+                        app.should_quit = true;
                     }
-                }
+                    Err(e) => app.status = t!("tui.error.prefix", "msg" => e),
+                },
             }
         }
         KeyCode::Char('n') | KeyCode::Esc => app.cancel_mode(),

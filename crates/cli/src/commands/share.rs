@@ -9,7 +9,10 @@ pub async fn run_share(note_id: Uuid, target: String, permission: String) -> Res
     }
     let client = JotClient::from_config();
     client.share_note(note_id, &target, &permission).await?;
-    println!("{}", t!("cmd.share.shared", "id" => note_id, "target" => target, "perm" => permission));
+    println!(
+        "{}",
+        t!("cmd.share.shared", "id" => note_id, "target" => target, "perm" => permission)
+    );
     Ok(())
 }
 
@@ -32,7 +35,11 @@ pub async fn run_list(note_id: Uuid) -> Result<(), CliError> {
     for s in &shares {
         let name = s.shared_with_name.as_deref().unwrap_or(&s.shared_with_id);
         let perm = s.permission.as_deref().unwrap_or("read");
-        let enc = if s.public_key_x25519.is_some() { "\u{1f512}" } else { "\u{26a0} no key" };
+        let enc = if s.public_key_x25519.is_some() {
+            "\u{1f512}"
+        } else {
+            "\u{26a0} no key"
+        };
         println!("  {enc}  {name}  ({})  [{perm}]", &s.shared_with_id[..8]);
     }
     Ok(())

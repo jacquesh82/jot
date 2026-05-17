@@ -131,7 +131,12 @@ pub async fn list_shares(
         }
         let identity = state.db.get_identity_by_id(&s.shared_with_id).await?;
         let (name, pubkey) = identity
-            .map(|i| (Some(i.friendly_name), i.public_key_x25519.map(|b| hex::encode(b))))
+            .map(|i| {
+                (
+                    Some(i.friendly_name),
+                    i.public_key_x25519.map(|b| hex::encode(b)),
+                )
+            })
             .unwrap_or((None, None));
         entries.push(ShareEntry {
             shared_with_id: s.shared_with_id,
@@ -208,7 +213,13 @@ pub async fn share_note(
     };
     state
         .db
-        .share_note(&note_id, &claims.identity_id, &target_id, dek_bytes, &permission)
+        .share_note(
+            &note_id,
+            &claims.identity_id,
+            &target_id,
+            dek_bytes,
+            &permission,
+        )
         .await?;
     Ok(StatusCode::CREATED)
 }
@@ -252,7 +263,9 @@ pub async fn delete_share(
     }
     // Prevent deleting the owner's own DEK entry (self-share).
     if target_id == owner_id {
-        return Err(ApiError::BadRequest("cannot revoke the note owner's own access".into()));
+        return Err(ApiError::BadRequest(
+            "cannot revoke the note owner's own access".into(),
+        ));
     }
     state.db.delete_share(&note_id, &target_id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -322,10 +335,20 @@ pub async fn put_dek_for_identity(
     let note_uuid = note_id
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
-    let note = state.db.get_note(note_uuid).await?.ok_or(ApiError::NotFound)?;
-    let board = state.db.get_board(note.board_id).await?.ok_or(ApiError::NotFound)?;
+    let note = state
+        .db
+        .get_note(note_uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let board = state
+        .db
+        .get_board(note.board_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     if board.identity_id.to_string() != claims.identity_id {
-        return Err(ApiError::Forbidden("only the note owner can push DEKs".into()));
+        return Err(ApiError::Forbidden(
+            "only the note owner can push DEKs".into(),
+        ));
     }
     let dek_bytes = hex::decode(&body.encrypted_dek)
         .map_err(|_| ApiError::BadRequest("encrypted_dek must be hex-encoded".into()))?;
@@ -337,7 +360,13 @@ pub async fn put_dek_for_identity(
         .unwrap_or_else(|| "read".to_string());
     state
         .db
-        .share_note(&note_id, &claims.identity_id, &identity_id, Some(dek_bytes), &permission)
+        .share_note(
+            &note_id,
+            &claims.identity_id,
+            &identity_id,
+            Some(dek_bytes),
+            &permission,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -357,8 +386,16 @@ pub async fn get_dek(
     let note_uuid = note_id
         .parse::<Uuid>()
         .map_err(|_| ApiError::BadRequest("invalid note id".into()))?;
-    let note = state.db.get_note(note_uuid).await?.ok_or(ApiError::NotFound)?;
-    let board = state.db.get_board(note.board_id).await?.ok_or(ApiError::NotFound)?;
+    let note = state
+        .db
+        .get_note(note_uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let board = state
+        .db
+        .get_board(note.board_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let owner_id = board.identity_id.to_string();
     let owner_pubkey = if owner_id != claims.identity_id {
         state

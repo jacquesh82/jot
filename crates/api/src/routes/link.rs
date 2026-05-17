@@ -1,4 +1,8 @@
-use crate::auth::{make_claims, middleware::{AuthenticatedDevice, OptionalDevice}, sign_token};
+use crate::auth::{
+    make_claims,
+    middleware::{AuthenticatedDevice, OptionalDevice},
+    sign_token,
+};
 use crate::state::AppState;
 use crate::ApiError;
 use axum::{

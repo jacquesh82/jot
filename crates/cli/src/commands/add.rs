@@ -45,7 +45,9 @@ fn read_from_editor() -> Result<String, CliError> {
     std::process::Command::new(&editor)
         .arg(&path)
         .status()
-        .map_err(|e| CliError::Config(t!("cmd.note.editorFailed", "editor" => editor, "err" => e)))?;
+        .map_err(|e| {
+            CliError::Config(t!("cmd.note.editorFailed", "editor" => editor, "err" => e))
+        })?;
     let content = std::fs::read_to_string(&path)?;
     let _ = std::fs::remove_file(&path);
     Ok(content.trim().to_string())

@@ -11,7 +11,10 @@ pub async fn run() -> Result<(), CliError> {
     }
     for c in arr {
         let id = c["id"].as_str().or(c["identity_id"].as_str()).unwrap_or("");
-        let name = c["friendly_name"].as_str().or(c["name"].as_str()).unwrap_or("");
+        let name = c["friendly_name"]
+            .as_str()
+            .or(c["name"].as_str())
+            .unwrap_or("");
         println!("  {name}\t{id}");
     }
     Ok(())
