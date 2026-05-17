@@ -131,12 +131,7 @@ pub async fn list_shares(
         }
         let identity = state.db.get_identity_by_id(&s.shared_with_id).await?;
         let (name, pubkey) = identity
-            .map(|i| {
-                (
-                    Some(i.friendly_name),
-                    i.public_key_x25519.map(hex::encode),
-                )
-            })
+            .map(|i| (Some(i.friendly_name), i.public_key_x25519.map(hex::encode)))
             .unwrap_or((None, None));
         entries.push(ShareEntry {
             shared_with_id: s.shared_with_id,
