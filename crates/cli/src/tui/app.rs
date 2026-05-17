@@ -29,6 +29,7 @@ pub enum InputContext {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 pub enum ConfirmAction {
     DeleteNote(Uuid),
     DeleteBoard(Uuid),

@@ -58,7 +58,7 @@ pub async fn get_board_key(
         .get_identity_by_id(&board.identity_id.to_string())
         .await?
         .and_then(|i| i.public_key_x25519)
-        .map(|b| hex::encode(b));
+        .map(hex::encode);
 
     Ok(Json(GetBekResponse {
         encrypted_bek: hex::encode(bek),

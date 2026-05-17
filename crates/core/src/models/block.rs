@@ -26,6 +26,7 @@ impl BlockType {
             BlockType::Divider => "divider",
         }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "heading" => BlockType::Heading,
@@ -69,6 +70,7 @@ impl TargetKind {
             TargetKind::Tag => "tag",
         }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "note" => Some(Self::Note),
@@ -97,6 +99,7 @@ impl LinkKind {
             LinkKind::Tag => "tag",
         }
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "page_ref" => Some(Self::PageRef),

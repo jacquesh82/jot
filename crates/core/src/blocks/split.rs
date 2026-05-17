@@ -113,11 +113,11 @@ pub fn split_markdown(md: &str) -> Vec<SplitBlock> {
             });
             continue;
         }
-        if rest.starts_with("> ") {
+        if let Some(quote_body) = rest.strip_prefix("> ") {
             flush_para(&mut out, &mut paragraph, indent);
             out.push(SplitBlock {
                 block_type: BlockType::Quote,
-                content: rest[2..].to_string(),
+                content: quote_body.to_string(),
                 indent,
             });
             continue;

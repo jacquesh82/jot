@@ -26,7 +26,7 @@ pub struct SharedNoteRow {
 /// Hierarchy: delete ≥ write ≥ read.
 pub fn permission_allows(actual: &str, required: &str) -> bool {
     match required {
-        "read" => true,
+        "read" => matches!(actual, "read" | "write" | "delete"),
         "write" => matches!(actual, "write" | "delete"),
         "delete" => actual == "delete",
         _ => false,

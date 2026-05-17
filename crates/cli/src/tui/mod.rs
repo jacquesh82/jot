@@ -239,10 +239,9 @@ async fn handle_normal(app: &mut App, code: KeyCode) {
             .get(app.selected_note)
             .map(|n| n.note_type == "text" && n.schema_version >= 1)
             .unwrap_or(false)
+        && handle_block_keys(app, code).await
     {
-        if handle_block_keys(app, code).await {
-            return;
-        }
+        return;
     }
 
     // Normal MyBoards / SharedBoards / SharedNotes handling

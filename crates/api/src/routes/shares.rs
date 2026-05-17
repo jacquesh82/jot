@@ -134,7 +134,7 @@ pub async fn list_shares(
             .map(|i| {
                 (
                     Some(i.friendly_name),
-                    i.public_key_x25519.map(|b| hex::encode(b)),
+                    i.public_key_x25519.map(hex::encode),
                 )
             })
             .unwrap_or((None, None));
@@ -403,7 +403,7 @@ pub async fn get_dek(
             .get_identity_by_id(&owner_id)
             .await?
             .and_then(|i| i.public_key_x25519)
-            .map(|b| hex::encode(b))
+            .map(hex::encode)
     } else {
         None
     };
